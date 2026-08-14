@@ -194,6 +194,43 @@ function M.test_paint_stroke()
   t.true_(doc._in_flight == nil, "no in-flight stroke after end")
 end
 
+-- regression: with a downscale below, the preview shows the WORKING size
+-- (not doc.canvas), but clicks were normalized against doc.canvas — the
+-- dab landed shrunk near the texture origin. The preview now rescales
+-- clicks into canvas space and paint_begin stores the working size, so a
+-- click at working (4,4) on a 32→8 downscaled project paints at (4,4)
+-- with a full-size brush.
+function M.test_paint_stroke_scales_to_working_size()
+  fresh() -- canvas 16x16 here; use a downscale 16 → 8
+  add_fill({ r = 100, g = 100, b = 100, a = 255 })
+  local d = doc.new_layer("downscale")
+  d.params.size = { 8, 8 }
+  d.params.filter = "box"
+  doc.add_layer(d)
+  local p = doc.new_layer("paint")
+  p.params.size = 4
+  doc.add_layer(p)
+  -- the preview mapping: click working (4,4) → canvas coords
+  local w, h = 8, 8 -- displayed composite size
+  local to_canvas = function(v, dim)
+    return v * doc.canvas[dim] / (dim == 1 and w or h)
+  end
+  doc.paint_begin(p.id, w, h)
+  doc.paint_append(to_canvas(4, 1), to_canvas(4, 2))
+  doc.paint_end()
+  -- paint output at the working size
+  local img = render.layer(p, { 8, 8 }, nil, nil)
+  local a = select(4, tex.get(img, 4, 4))
+  t.true_(a > 200, "dab at click position, a=" .. a)
+  local a0 = select(4, tex.get(img, 0, 0))
+  t.eq(a0, 0, "origin untouched")
+  -- brush radius: size 4 → radius 2 → ~5px dab, not sub-pixel
+  local r = select(4, tex.get(img, 5, 4))
+  t.true_(r > 100, "brush has real radius, a=" .. r)
+  local comp = render.composite(nil, { 16, 16 }, doc._cache)
+  t.eq(select(1, tex.size(comp)), 8, "composite stays downscaled")
+end
+
 function M.test_export_layer_marker()
   fresh()
   add_fill({ r = 10, g = 20, b = 30, a = 255 })

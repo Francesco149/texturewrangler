@@ -138,11 +138,20 @@ local function begin_main(w, h)
   ig.begin("##main", MAIN_FLAGS)
 end
 
--- the Project toolbar button: a small popup with project actions
+-- the Project toolbar button: a hover-menu. Opens on click or hover
+-- (armed), and closes when the mouse leaves both the button and the menu.
+-- The old version called open_popup every frame while the flag was set,
+-- which re-opened a just-closed popup on the next frame ("can never go
+-- away") and re-anchored it to the cursor every frame (draggable feel).
 local function project_popup_frame()
-  if not panels.state.project_popup then return end
-  ig.open_popup("##project")
+  local st = panels.state
+  if not st.project_popup then return end
+  if not st.project_popup_open then
+    ig.open_popup("##project")
+    st.project_popup_open = true
+  end
   if ig.begin_popup("##project") then
+    local popup_hover = ig.is_window_hovered()
     ig.text(doc.name)
     ig.text_colored(doc.path or "(unsaved)", 0.45, 0.47, 0.52, 1)
     ig.separator()
@@ -152,8 +161,16 @@ local function project_popup_frame()
     end
     if ig.menu_item("Save now") then doc.save() end
     ig.end_popup()
+    if not popup_hover and not st.project_btn_hover then
+      ig.close_current_popup()
+      st.project_popup = false
+      st.project_popup_open = false
+    end
   else
-    panels.state.project_popup = false
+    -- closed (escape, click elsewhere, item click) — drop the flag so the
+    -- popup is not re-opened next frame.
+    st.project_popup = false
+    st.project_popup_open = false
   end
 end
 

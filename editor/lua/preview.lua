@@ -191,12 +191,22 @@ function preview.frame(rect)
   if sel_layer and sel_layer.type == "paint" then
     local mx, my = ig.get_mouse_pos()
     local in_canvas = mx >= px and mx < px + img_w and my >= py and my < py + img_h
+    -- click → working-space pixel: (mouse - image origin) / scale. The
+    -- displayed composite may be a different size than doc.canvas (a
+    -- downscale layer below), so rescale into canvas space before
+    -- paint_append, which normalizes by doc.canvas. Without this, clicks
+    -- on a downscaled project painted a shrunk dab near the origin.
+    local to_canvas = function(v, d)
+      return v * doc.canvas[d] / (d == 1 and w or h)
+    end
     if ig.is_mouse_clicked(0) and in_canvas and not ig.is_mouse_dragging(2) and
        not (io.key_alt and ig.is_mouse_dragging(0)) then
-      doc.paint_begin(sel)
-      doc.paint_append((mx - px) / scale, (my - py) / scale)
+      doc.paint_begin(sel, w, h)
+      doc.paint_append(to_canvas((mx - px) / scale, 1),
+                       to_canvas((my - py) / scale, 2))
     elseif doc._in_flight and ig.is_mouse_dragging(0) and in_canvas then
-      doc.paint_append((mx - px) / scale, (my - py) / scale)
+      doc.paint_append(to_canvas((mx - px) / scale, 1),
+                       to_canvas((my - py) / scale, 2))
     elseif doc._in_flight and not ig.is_mouse_down(0) then
       doc.paint_end()
     end

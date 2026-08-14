@@ -63,7 +63,7 @@ local function group_of(l, at_top)
     g.children = { l }
     doc._parent[l.id] = g.id
     table.insert(list, idx, g)
-    doc._parent[g.id] = parent or nil
+    doc._parent[g.id] = parent and parent.id or nil
   end, "Group layers")
   return g
 end
@@ -153,7 +153,7 @@ local function row(l, depth, in_flight)
       local copy = duplicate(l)
       doc.mutate(function()
         local parent = doc.find_parent(l.id)
-        doc.add_layer(copy, parent, true)
+        doc.add_layer(copy, parent and parent.id, true)
       end, "Duplicate layer")
       panels.set_selected(copy.id)
     end
@@ -206,7 +206,10 @@ local function row(l, depth, in_flight)
           end
         end
         if best and best ~= idx then
-          doc.coalesce_mutate(function() doc.move_layer(l.id, best) end)
+          -- deferred: applied after the row pass in frame() — mutating the
+          -- list mid-iteration rendered the same layer twice (duplicate
+          -- name, imgui id conflict) and confused the drag math.
+          panel._pending_move = { id = l.id, to = best }
         end
       end
     else
@@ -218,9 +221,14 @@ local function row(l, depth, in_flight)
   ig.pop_id()
   if not ok then error(err, 0) end
 
-  -- children (groups)
+  -- children (groups). Snapshot before iterating — context-menu actions
+  -- mutate the tree mid-frame, and the live list would re-render the same
+  -- layer (duplicate imgui ids). Top-first, matching the root stack, so a
+  -- drag "down" means the same thing inside a group as outside.
   if l.children and #l.children > 0 then
-    for _, c in ipairs(l.children) do row(c, depth + 1, in_flight) end
+    local kids = {}
+    for i = #l.children, 1, -1 do kids[#kids + 1] = l.children[i] end
+    for _, c in ipairs(kids) do row(c, depth + 1, in_flight) end
   end
 end
 
@@ -236,10 +244,21 @@ function panel.frame()
     end
   end
   ig.separator()
-  -- stack: top layer first (reverse of doc.layers)
+  -- stack: top layer first (reverse of doc.layers). Snapshot first — the
+  -- context menu can mutate the tree mid-frame, and iterating the live
+  -- list then skips rows or renders a layer twice (duplicate imgui ids).
   local in_flight = doc._in_flight ~= nil
-  for i = #doc.layers, 1, -1 do
-    row(doc.layers[i], 0, in_flight)
+  local top_down = {}
+  for i = #doc.layers, 1, -1 do top_down[#top_down + 1] = doc.layers[i] end
+  for _, l in ipairs(top_down) do
+    row(l, 0, in_flight)
+  end
+  -- deferred drag move (see row()): apply AFTER the pass so the list is
+  -- stable while rows render.
+  if panel._pending_move then
+    local pm = panel._pending_move
+    panel._pending_move = nil
+    doc.coalesce_mutate(function() doc.move_layer(pm.id, pm.to) end)
   end
   if #doc.layers == 0 then
     ig.text_colored("No layers — + Add an image or texture layer.", 0.45, 0.47, 0.52, 1)

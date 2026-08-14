@@ -27,10 +27,18 @@ doc._asset_cache = {}     -- asset id -> decoded Image
 doc._in_flight = nil      -- paint stroke layer id being drawn right now
 doc._coalescing = false   -- slider-drag undo coalescing
 
+-- layer ids must be unique across SESSIONS, not just this process: the
+-- old format (clock+process-local counter) restarted at 0 in every
+-- process, so two sessions doing similar startup work minted IDENTICAL
+-- ids (the second process's "l1d1" silently collided with the first's —
+-- doc.get_layer then returned the wrong layer and group/delete corrupted
+-- the doc). time() separates sessions; the "_" separates the counter so
+-- deserialize can resume past loaded ids; the clock adds entropy.
 local id_counter = 0
 local function new_id()
   id_counter = id_counter + 1
-  return string.format("l%x%x", math.floor(os.clock() * 1000) % 0xffff, id_counter)
+  return string.format("l%x%x_%x", os.time() % 0xffff,
+                       math.floor(os.clock() * 1000) % 0xffff, id_counter)
 end
 
 -- ── layer factory ───────────────────────────────────────────────────────────
@@ -102,8 +110,15 @@ function doc.get_layer(id)
   return nil
 end
 
+-- parent layer of a layer (nil if root). doc._parent maps id→parent id;
+-- callers want the parent LAYER (its .children list) — returning the bare
+-- id here made every caller's `parent.children` silently fall back to the
+-- ROOT list for grouped layers (drag reorder no-op, group/delete corrupting
+-- the wrong list).
 function doc.find_parent(id)
-  return doc._parent[id]
+  local pid = doc._parent[id]
+  if not pid then return nil end
+  return doc.get_layer(pid)
 end
 
 -- flat index of a layer in doc.layers (groups count as one)
@@ -276,6 +291,14 @@ function doc.deserialize(t)
     for _, l in ipairs(list) do
       doc._parent[l.id] = parent_id or nil
       doc._ver[l.id] = 0
+      -- resume the id counter past every id in the doc, so layers created
+      -- in THIS process can't collide with ones loaded from disk (the
+      -- counter is the "_"-separated trailing hex group)
+      local c = l.id and l.id:match("_(%x+)$")
+      if c then
+        local n = tonumber(c, 16)
+        if n and n > id_counter then id_counter = n end
+      end
       if l.children then index(l.children, l.id) end
     end
   end
@@ -326,9 +349,14 @@ function doc.projects_dir()
   return home .. "/texturewrangler/projects"
 end
 
--- ── paint stroke plumbing (called from the preview panel) ──────────────────
+-- paint stroke plumbing (called from the preview panel) ──────────────────
 
-function doc.paint_begin(layer_id)
+-- w, h = the working size the stroke is authored in (the displayed
+-- composite size at paint time). Defaults to doc.canvas for programmatic
+-- callers (demo.lua). Storing the WORKING size (not doc.canvas) is what
+-- keeps brush px and stroke placement correct when a downscale layer makes
+-- the working size differ from the project canvas.
+function doc.paint_begin(layer_id, w, h)
   local l = doc.get_layer(layer_id)
   if not l or l.type ~= "paint" then return false end
   doc._in_flight = layer_id
@@ -336,7 +364,7 @@ function doc.paint_begin(layer_id)
   local stroke = { points = {}, size = p.size, hardness = p.hardness,
                    color = deepcopy(p.color), eraser = p.eraser,
                    stamp_layer = p.stamp_layer,
-                   canvas = { doc.canvas[1], doc.canvas[2] } }
+                   canvas = { w or doc.canvas[1], h or doc.canvas[2] } }
   p.strokes[#p.strokes + 1] = stroke
   return true
 end

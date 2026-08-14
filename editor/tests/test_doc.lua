@@ -90,6 +90,74 @@ function M.test_remove_group_drops_children()
   t.eq(doc.get_layer(c.id), nil, "child gone")
 end
 
+-- regression: doc.find_parent used to return the parent ID (a string), so
+-- callers doing `parent.children` silently fell back to the ROOT list for
+-- grouped layers — group/delete corrupted the wrong list and in-group drag
+-- reorder was a no-op.
+function M.test_find_parent_returns_layer()
+  fresh_doc()
+  local g = doc.new_layer("group")
+  doc.add_layer(g)
+  local c = doc.new_layer("fill")
+  doc.add_layer(c, g.id)
+  local parent = doc.find_parent(c.id)
+  t.true_(parent ~= nil, "child has a parent")
+  t.eq(parent.id, g.id, "parent is the group")
+  t.true_(type(parent.children) == "table", "parent exposes .children")
+  t.eq(doc.find_parent(g.id), nil, "root group has no parent")
+end
+
+function M.test_move_layer_within_group()
+  fresh_doc()
+  local g = doc.new_layer("group")
+  doc.add_layer(g)
+  local c1, c2, c3 = doc.new_layer("fill"), doc.new_layer("fill"), doc.new_layer("fill")
+  doc.add_layer(c1, g.id)
+  doc.add_layer(c2, g.id)
+  doc.add_layer(c3, g.id)
+  -- drag c1 (bottom) to the top of the group
+  doc.move_layer(c1.id, 3)
+  local kids = doc.get_layer(g.id).children
+  t.eq(kids[1].id, c2.id, "first child")
+  t.eq(kids[2].id, c3.id, "second child")
+  t.eq(kids[3].id, c1.id, "third child")
+  t.eq(#doc.layers, 1, "root list untouched")
+end
+
+function M.test_remove_child_layer()
+  fresh_doc()
+  local g = doc.new_layer("group")
+  doc.add_layer(g)
+  local c = doc.new_layer("fill")
+  doc.add_layer(c, g.id)
+  doc.remove_layer(c.id)
+  t.eq(#doc.get_layer(g.id).children, 0, "child removed from group")
+  t.eq(doc.get_layer(c.id), nil, "child gone")
+  t.eq(#doc.layers, 1, "group still in root")
+end
+
+-- regression: ids used to be clock+process-local-counter, which restarted
+-- in every process — two sessions doing similar startup work minted
+-- IDENTICAL ids, so a layer loaded from disk and a freshly added one could
+-- collide (doc.get_layer returned the wrong layer). deserialize now
+-- resumes the counter past loaded ids.
+function M.test_loaded_ids_dont_collide_with_new()
+  fresh_doc()
+  -- a doc saved by "another process" whose first id is exactly what THIS
+  -- process's new_id() would produce for counter=1
+  local expected = string.format("l%x%x_1", os.time() % 0xffff,
+                                 math.floor(os.clock() * 1000) % 0xffff)
+  doc.deserialize({ name = "x", canvas = { 16, 16 }, exports = {}, assets = {},
+                    layers = { { id = expected, type = "fill", name = "Loaded",
+                                 visible = true, opacity = 1, blend = "normal",
+                                 params = {} } } })
+  local l = doc.new_layer("fill")
+  doc.add_layer(l)
+  t.true_(l.id ~= expected, "new id differs from loaded id: " .. l.id)
+  t.eq(doc.get_layer(expected).name, "Loaded", "loaded layer intact")
+  t.eq(doc.get_layer(l.id).name, "Fill", "new layer reachable by its id")
+end
+
 function M.test_asset_add()
   fresh_doc()
   -- write a tiny png via the save path, load it back

@@ -211,20 +211,25 @@ static void dialog_cb(void* userdata, const char* const* files, int filter) {
 
 static int l_app_open_file_dialog(lua_State* L) {
   (void)L;
+  // SDL3 filter patterns are a semicolon-separated list of extensions
+  // ("png;jpg"), NOT comma-separated — commas fail SDL's pattern
+  // validation and the dialog errors out before opening.
   static const SDL_DialogFileFilter filters[] = {
-      {"Images", "png,jpg,jpeg,bmp,tga,gif,webp"},
+      {"Images", "png;jpg;jpeg;bmp;tga;gif;webp"},
       {"All files", "*"}};
   DlgCtx* ctx = (DlgCtx*)SDL_malloc(sizeof(DlgCtx));
   ctx->path[0] = 0;
   // The Linux dialog needs the xdg-desktop-portal (absent under WSLg), so
   // it can fail silently — report the failure so Lua can fall back to the
-  // in-app file browser.
+  // in-app file browser. NOTE: on the validation-error path SDL calls the
+  // callback SYNCHRONOUSLY with files=NULL, so dialog_cb already freed ctx
+  // when we get here — free only in the callback, never here (a second
+  // SDL_free was a double free → heap corruption/crash on Ctrl+U).
   SDL_ClearError();
   SDL_ShowOpenFileDialog(dialog_cb, ctx, g_window, filters, 2, nullptr, false);
   const char* err = SDL_GetError();
   if (err && err[0]) {
     app_log("native file dialog unavailable: %s", err);
-    SDL_free(ctx);
     lua_pushboolean(L, 0);
     return 1;
   }
