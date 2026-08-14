@@ -157,6 +157,17 @@ tools/embed.py     fonts → C array header
 - Embedded fonts are `FontDataOwnedByAtlas=false` — imgui would free()
   static arrays at shutdown otherwise.
 - `SDL_RenderReadPixels` in SDL 3.4.12 returns an SDL_Surface (newer API).
+- NEVER launch a Windows process from a WSL UNC cwd
+  (`\\wsl.localhost\...`): cmd/PowerShell inherit it, and some component
+  pops a modal "couldn't find \\wsl.localhost..." error dialog on the
+  HOST SCREEN that blocks every subsequent click/launch until a human
+  clicks OK. Always `cd /d C:\<windows path>` first (cmd) or pass
+  `-WorkingDirectory` (PowerShell). Host E2E clicks: find the window via
+  `Get-Process .MainWindowHandle` + `GetWindowRect` (FindWindow is
+  flaky), click with user32 `SetCursorPos` + `mouse_event`. The SDL3
+  native file dialog needs the xdg-desktop-portal on Linux — absent
+  under WSLg, it fails silently, so `tw.app.open_file_dialog` reports
+  the failure and import falls back to the in-app browser.
 - `pkgsCross.mingwW64.buildPackages.sdl3` is the LINUX sdl3 — libraries for
   the target come from `pkgsCross.mingwW64.sdl3` directly; `bin` output
   holds the DLL. mingw links libmcfgthread-2.dll dynamically — the package
