@@ -167,6 +167,11 @@ int file_exists(const char* path) {
   return stat(path, &st) == 0;
 }
 
+int file_is_dir(const char* path) {
+  struct stat st;
+  return stat(path, &st) == 0 && S_ISDIR(st.st_mode);
+}
+
 // ── path helpers (small rotating buffers so nested calls don't clobber) ─────
 
 static char* path_buf(void) {
@@ -248,6 +253,11 @@ static int l_file_write_text(lua_State* L) {
 
 static int l_file_exists(lua_State* L) {
   lua_pushboolean(L, file_exists(luaL_checkstring(L, 1)));
+  return 1;
+}
+
+static int l_file_is_dir(lua_State* L) {
+  lua_pushboolean(L, file_is_dir(luaL_checkstring(L, 1)));
   return 1;
 }
 
@@ -336,6 +346,8 @@ void file_register(lua_State* L) {
   lua_setfield(L, -2, "write_text");
   lua_pushcfunction(L, l_file_exists);
   lua_setfield(L, -2, "exists");
+  lua_pushcfunction(L, l_file_is_dir);
+  lua_setfield(L, -2, "is_dir");
   lua_pushcfunction(L, l_file_mkdirs);
   lua_setfield(L, -2, "mkdirs");
   lua_pushcfunction(L, l_file_copy);

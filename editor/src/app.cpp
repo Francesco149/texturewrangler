@@ -216,8 +216,40 @@ static int l_app_open_file_dialog(lua_State* L) {
       {"All files", "*"}};
   DlgCtx* ctx = (DlgCtx*)SDL_malloc(sizeof(DlgCtx));
   ctx->path[0] = 0;
+  // The Linux dialog needs the xdg-desktop-portal (absent under WSLg), so
+  // it can fail silently — report the failure so Lua can fall back to the
+  // in-app file browser.
+  SDL_ClearError();
   SDL_ShowOpenFileDialog(dialog_cb, ctx, g_window, filters, 2, nullptr, false);
-  return 0;
+  const char* err = SDL_GetError();
+  if (err && err[0]) {
+    app_log("native file dialog unavailable: %s", err);
+    SDL_free(ctx);
+    lua_pushboolean(L, 0);
+    return 1;
+  }
+  lua_pushboolean(L, 1);
+  return 1;
+}
+
+// tw.app.open_folder(path) — reveal a directory in the OS file manager
+static int l_app_open_folder(lua_State* L) {
+  const char* path = luaL_checkstring(L, 1);
+  char uri[2048];
+  // path may already be an http(s)/file URL; else wrap it
+  if (strncmp(path, "http://", 7) == 0 || strncmp(path, "https://", 8) == 0 ||
+      strncmp(path, "file://", 7) == 0) {
+    snprintf(uri, sizeof(uri), "%s", path);
+  } else {
+    snprintf(uri, sizeof(uri), "file://%s", path);
+  }
+  if (!SDL_OpenURL(uri)) {
+    app_log("open folder failed: %s", SDL_GetError());
+    lua_pushboolean(L, 0);
+    return 1;
+  }
+  lua_pushboolean(L, 1);
+  return 1;
 }
 
 void app_register(lua_State* L) {
@@ -241,6 +273,8 @@ void app_register(lua_State* L) {
   lua_setfield(L, -2, "eval");
   lua_pushcfunction(L, l_app_open_file_dialog);
   lua_setfield(L, -2, "open_file_dialog");
+  lua_pushcfunction(L, l_app_open_folder);
+  lua_setfield(L, -2, "open_folder");
   lua_setfield(L, -2, "app");
   lua_pop(L, 1);
 }

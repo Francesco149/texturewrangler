@@ -14,9 +14,98 @@ function import.is_image(path)
   return ext and IMAGE_EXT[ext:lower()] or false
 end
 
--- open the native file dialog (async; result routes through on_drop)
+-- open the native file dialog (async; result routes through on_drop).
+-- On Linux the dialog needs the xdg-desktop-portal, which WSLg does not
+-- run — SDL reports the failure immediately, so fall back to the in-app
+-- file browser (import.browser_frame) instead of silently doing nothing.
 function import.open_dialog()
-  tw.app.open_file_dialog("Import image")
+  local ok = tw.app.open_file_dialog("Import image")
+  if not ok then
+    import.browser.open = true
+    import.browser.dir = import.browser.dir or tw.file.home()
+  end
+end
+
+-- ── in-app file browser (import) ───────────────────────────────────────────
+-- A small modal: navigate directories, pick an image file. Works without
+-- any desktop portal. Drawn every frame from main.lua.
+
+import.browser = { open = false, dir = nil, sel = nil, last_click = 0 }
+
+function import.browser_frame()
+  local b = import.browser
+  if not b.open then return end
+  ig.open_popup("##import_browser")
+  ig.set_next_window_size(560, 420)
+  if not ig.begin_popup_modal("##import_browser") then return end
+  ig.text("Import image")
+  ig.separator()
+
+  local dir = b.dir or tw.file.home()
+  b.dir = dir
+  local parent = tw.file.dirname(dir)
+  local entries, n = tw.file.list(dir)
+  local dirs, files = {}, {}
+  for i = 1, n do
+    local name = entries[i]
+    if name ~= "." and name ~= ".." then
+      local full = tw.file.join(dir, name)
+      if tw.file.is_dir(full) then
+        dirs[#dirs + 1] = name
+      elseif import.is_image(name) then
+        files[#files + 1] = name
+      end
+    end
+  end
+  table.sort(dirs)
+  table.sort(files)
+
+  -- current path
+  ig.text_colored(dir, 0.45, 0.47, 0.52, 1)
+  ig.separator()
+
+  local now = os.clock()
+  local function pick(row_id, name, action)
+    -- single click selects; a second click within 0.4 s runs action
+    if ig.selectable(row_id, b.sel == name) then
+      if b.sel == name and now - b.last_click < 0.4 then
+        b.sel = nil
+        b.last_click = 0
+        action()
+      else
+        b.sel = name
+        b.last_click = now
+      end
+    end
+  end
+
+  local lw, lh = ig.get_content_region_avail()
+  ig.begin_child("##browser_list", lw, lh - 40, 1, 0)
+  if parent and parent ~= dir then
+    pick("[..]", "..", function() b.dir = parent end)
+  end
+  for _, d in ipairs(dirs) do
+    pick("[dir] " .. d, d, function() b.dir = tw.file.join(dir, d) end)
+  end
+  for _, f in ipairs(files) do
+    pick(f, f, function() import.file(tw.file.join(dir, f)) end)
+  end
+  ig.end_child()
+
+  -- bottom bar
+  if b.sel and b.sel ~= ".." then
+    local full = tw.file.join(dir, b.sel)
+    if not tw.file.is_dir(full) and ig.button("Import " .. b.sel) then
+      import.file(full)
+    end
+  end
+  ig.same_line()
+  if ig.button("Cancel") then
+    b.open = false
+    b.sel = nil
+    ig.close_current_popup()
+  end
+  ig.end_popup()
 end
 
 -- main entry: handle one image file path
