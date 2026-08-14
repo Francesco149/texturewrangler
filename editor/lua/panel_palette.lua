@@ -43,25 +43,31 @@ function panel.frame()
   local avail_w = ig.get_content_region_avail()
   local swatch = 30
   local cols = math.max(1, math.floor(avail_w / (swatch + 6)))
+  local sel_idx = math.max(1, math.min(#pal, panel.edit_idx or 1))
+  panel.edit_idx = sel_idx
   for i, c in ipairs(pal) do
     if (i - 1) % cols ~= 0 then ig.same_line(0, 6) end
     if u.color_swatch("sw" .. i, c, swatch, swatch) then
       panel.edit_idx = i
+      sel_idx = i
     end
     if ig.is_item_hovered() then
       ig.set_tooltip(string.format("#%s  (%d)", colors.hex(c), i))
+    end
+    -- ring the selected swatch (clicking a swatch selects it for editing)
+    if i == sel_idx then
+      local x0, y0 = ig.get_item_rect_min()
+      local x1, y1 = ig.get_item_rect_max()
+      local dl = ig.get_window_draw_list()
+      ig.dl_add_rect(dl, x0 - 2, y0 - 2, x1 + 2, y1 + 2, 0.92, 0.62, 0.35, 1, 0, 2)
     end
   end
   ig.new_line()
   ig.separator()
 
-  -- per-swatch edit: pick an index, then edit its color
-  local sel_idx = math.max(1, math.min(#pal, panel.edit_idx or 1))
-  panel.edit_idx = sel_idx
-  u.slider("Edit swatch", sel_idx, 1, #pal, function(v)
-    panel.edit_idx = math.floor(v)
-  end)
+  -- per-swatch edit: click a swatch above to pick which one this edits
   local c = pal[sel_idx]
+  ig.text_colored(string.format("Editing swatch %d", sel_idx), 0.45, 0.47, 0.52, 1)
   u.color("Color", c, function(v)
     u.coalesce(function()
       pal[sel_idx] = v

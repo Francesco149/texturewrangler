@@ -673,6 +673,14 @@ static int l_get_cursor_screen_pos(lua_State* L) {
   push_v2(L, ImGui::GetCursorScreenPos());
   return 2;
 }
+static int l_get_item_rect_min(lua_State* L) {
+  push_v2(L, ImGui::GetItemRectMin());
+  return 2;
+}
+static int l_get_item_rect_max(lua_State* L) {
+  push_v2(L, ImGui::GetItemRectMax());
+  return 2;
+}
 static int l_get_frame_height(lua_State* L) {
   lua_pushnumber(L, ImGui::GetFrameHeight());
   return 1;
@@ -867,6 +875,8 @@ void ig_register(lua_State* L) {
   REG(get_cursor_pos);
   REG(set_cursor_pos);
   REG(get_cursor_screen_pos);
+  REG(get_item_rect_min);
+  REG(get_item_rect_max);
   REG(get_frame_height);
   REG(get_frame_height_with_spacing);
   REG(get_window_pos);
