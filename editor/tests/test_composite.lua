@@ -239,4 +239,289 @@ function M.test_seamless_layer()
   t.true_(math.abs(lv - rv) <= 17, "boundary step reduced, " .. lv .. " vs " .. rv)
 end
 
+-- ── edge cases: effects with nothing below them ─────────────────────────────
+
+function M.test_grade_first_layer_below_nil()
+  fresh()
+  local g = doc.new_layer("grade")
+  doc.add_layer(g) -- index 1 → render(below = nil)
+  local img = render.composite(nil, { 16, 16 }, doc._cache)
+  t.true_(img ~= nil, "grade first layer renders")
+  t.all_pixels(img, 0, 0, 0, 0, "default grade over nil → transparent")
+end
+
+function M.test_palette_first_layer_below_nil()
+  fresh()
+  local p = doc.new_layer("palette")
+  p.params.colors = 2
+  doc.add_layer(p)
+  local img = render.composite(nil, { 16, 16 }, doc._cache)
+  t.true_(img ~= nil, "palette first layer renders")
+  t.all_pixels(img, 0, 0, 0, 0, "quantize of transparent stays transparent")
+  t.true_(p.params.palette ~= nil, "palette still extracted")
+end
+
+function M.test_seamless_first_layer_below_nil()
+  fresh()
+  local s = doc.new_layer("seamless")
+  doc.add_layer(s)
+  local img = render.composite(nil, { 16, 16 }, doc._cache)
+  t.true_(img ~= nil, "seamless first layer renders")
+  t.all_pixels(img, 0, 0, 0, 0, "seamless of transparent stays transparent")
+end
+
+function M.test_downscale_first_layer()
+  fresh()
+  local d = doc.new_layer("downscale")
+  d.params.size = { 8, 8 }
+  doc.add_layer(d)
+  local img = render.composite(nil, { 16, 16 }, doc._cache)
+  local w, h = tex.size(img)
+  t.eq(w, 8, "downscale first: width 8")
+  t.eq(h, 8, "downscale first: height 8")
+  t.all_pixels(img, 0, 0, 0, 0, "transparent at the new size")
+end
+
+function M.test_alpha_mask_below_at_index_one()
+  fresh()
+  local mask = doc.new_layer("fill", "mask")
+  mask.params.type = "solid"
+  mask.params.c0 = { r = 0, g = 0, b = 0, a = 128 }
+  mask.blend = "alphamask"
+  mask.params.scope = "below"
+  doc.add_layer(mask) -- index 1: scope=below has nothing below → composite scope
+  local img = render.composite(nil, { 16, 16 }, doc._cache)
+  t.true_(img ~= nil, "mask at index 1 renders")
+  local _, _, _, a = tex.get(img, 0, 0)
+  t.eq(a, 128, "mask output passes through unchanged, a=" .. a)
+end
+
+function M.test_paint_first_layer()
+  fresh()
+  local p = doc.new_layer("paint")
+  p.params.size = 4
+  doc.add_layer(p)
+  doc.paint_begin(p.id)
+  doc.paint_append(4, 4)
+  doc.paint_end()
+  local img = render.composite(nil, { 16, 16 }, doc._cache)
+  t.true_(img ~= nil, "paint first layer renders")
+  local a = select(4, tex.get(img, 4, 4))
+  t.true_(a > 200, "stroke over transparent, a=" .. a)
+  local a2 = select(4, tex.get(img, 15, 15))
+  t.eq(a2, 0, "corner untouched")
+end
+
+function M.test_export_layer_only()
+  fresh()
+  local e = doc.new_layer("export")
+  e.params.export_name = "only"
+  doc.add_layer(e)
+  local img = render.composite(nil, { 16, 16 }, doc._cache)
+  t.eq(img, nil, "export marker only → composite nil")
+end
+
+function M.test_group_only_self_only()
+  fresh()
+  local g = doc.new_layer("group")
+  g.params.include_below = false
+  doc.add_layer(g)
+  local c = doc.new_layer("fill", "green")
+  c.params.type = "solid"
+  c.params.c0 = { r = 0, g = 255, b = 0, a = 255 }
+  doc.add_layer(c, g.id)
+  local img = render.composite(nil, { 16, 16 }, doc._cache)
+  t.true_(img ~= nil, "self-only group alone renders")
+  t.all_pixels(img, 0, 255, 0, 255, "group child fill shows")
+end
+
+function M.test_group_only_include_below()
+  fresh()
+  local g = doc.new_layer("group")
+  g.params.include_below = true
+  doc.add_layer(g)
+  local c = doc.new_layer("fill", "green")
+  c.params.type = "solid"
+  c.params.c0 = { r = 0, g = 255, b = 0, a = 255 }
+  doc.add_layer(c, g.id)
+  local img = render.composite(nil, { 16, 16 }, doc._cache)
+  t.true_(img ~= nil, "include-below group alone renders")
+  t.all_pixels(img, 0, 255, 0, 255, "include-below with nil below → child only")
+end
+
+function M.test_empty_group_only()
+  fresh()
+  local g = doc.new_layer("group")
+  doc.add_layer(g)
+  local img = render.composite(nil, { 16, 16 }, doc._cache)
+  t.eq(img, nil, "empty group only → composite nil")
+end
+
+-- ── edge cases: layer visibility ────────────────────────────────────────────
+
+function M.test_hidden_top_layer()
+  fresh()
+  add_fill({ r = 255, g = 0, b = 0, a = 255 })
+  local g = add_fill({ r = 0, g = 255, b = 0, a = 255 })
+  local both = render.composite(nil, { 16, 16 }, doc._cache)
+  t.all_pixels(both, 0, 255, 0, 255, "top green covers red")
+  g.visible = false
+  doc.bump(g)
+  local hid = render.composite(nil, { 16, 16 }, doc._cache)
+  t.all_pixels(hid, 255, 0, 0, 255, "hidden top → red shows")
+  g.visible = true
+  doc.bump(g)
+  local back = render.composite(nil, { 16, 16 }, doc._cache)
+  t.all_pixels(back, 0, 255, 0, 255, "unhide → green again")
+end
+
+function M.test_hidden_downscale_keeps_size()
+  fresh()
+  add_fill({ r = 50, g = 100, b = 150, a = 255 })
+  local d = doc.new_layer("downscale")
+  d.params.size = { 4, 4 }
+  doc.add_layer(d)
+  d.visible = false
+  doc.bump(d)
+  local img = render.composite(nil, { 16, 16 }, doc._cache)
+  local w, h = tex.size(img)
+  t.eq(w, 16, "hidden downscale keeps width 16")
+  t.eq(h, 16, "hidden downscale keeps height 16")
+  t.all_pixels(img, 50, 100, 150, 255, "fill unchanged")
+  d.visible = true
+  doc.bump(d)
+  local small = render.composite(nil, { 16, 16 }, doc._cache)
+  local w2 = select(1, tex.size(small))
+  t.eq(w2, 4, "unhide → downscaled to 4")
+end
+
+function M.test_hidden_group()
+  fresh()
+  add_fill({ r = 255, g = 0, b = 0, a = 255 })
+  local g = doc.new_layer("group")
+  g.params.include_below = false
+  doc.add_layer(g)
+  local c = doc.new_layer("fill", "green")
+  c.params.type = "solid"
+  c.params.c0 = { r = 0, g = 255, b = 0, a = 255 }
+  doc.add_layer(c, g.id)
+  g.visible = false
+  doc.bump(g)
+  local img = render.composite(nil, { 16, 16 }, doc._cache)
+  t.all_pixels(img, 255, 0, 0, 255, "hidden group contributes nothing")
+end
+
+function M.test_hidden_group_child()
+  fresh()
+  add_fill({ r = 255, g = 0, b = 0, a = 255 })
+  local g = doc.new_layer("group")
+  g.params.include_below = false
+  doc.add_layer(g)
+  local c = doc.new_layer("fill", "green")
+  c.params.type = "solid"
+  c.params.c0 = { r = 0, g = 255, b = 0, a = 255 }
+  doc.add_layer(c, g.id)
+  c.visible = false
+  doc.bump(c)
+  local img = render.composite(nil, { 16, 16 }, doc._cache)
+  t.all_pixels(img, 255, 0, 0, 255, "hidden group child contributes nothing")
+end
+
+function M.test_all_hidden_stack_nil()
+  fresh()
+  local a = add_fill({ r = 1, g = 2, b = 3, a = 255 })
+  a.visible = false
+  doc.bump(a)
+  local img = render.composite(nil, { 16, 16 }, doc._cache)
+  t.eq(img, nil, "all hidden → composite nil")
+end
+
+-- ── noise panel: Monochrome/Tinted combo index round-trip ───────────────────
+-- ui.combo is 1-based; the stored param is 0/1. The panel must translate
+-- both ways or the combo gets stuck (selecting "Tinted" stored 2, which the
+-- kernel treated as monochrome, and Monochrome could never be re-selected).
+
+function M.test_noise_color_combo_roundtrip()
+  fresh()
+  local n = doc.new_layer("noise")
+  doc.add_layer(n)
+  local seen = nil
+  local fake = setmetatable({}, {
+    __index = function(_, k) return function() end end, -- no-op controls
+  })
+  fake.combo = function(label, items, current, on_change)
+    if label == "Color" then seen = { current = current, on_change = on_change } end
+  end
+  local noise_mod = require("layers.noise")
+  -- default Monochrome (colorize=0) must show as 1-based index 1
+  noise_mod.panel(n, fake)
+  t.eq(seen.current, 1, "monochrome shown at index 1")
+  -- user selects "Tinted" (1-based 2) → param becomes 1
+  seen.on_change(2)
+  t.eq(n.params.colorize, 1, "tinted stores 1")
+  -- reopen: Tinted shows at index 2
+  seen = nil
+  noise_mod.panel(n, fake)
+  t.eq(seen.current, 2, "tinted shown at index 2")
+  -- user selects "Monochrome" (1-based 1) → param back to 0
+  seen.on_change(1)
+  t.eq(n.params.colorize, 0, "monochrome stores 0")
+  -- serialized round-trip stays 0/1
+  t.eq(doc.serialize().layers[1].params.colorize, 0, "serialized colorize is 0")
+end
+
+-- ── edge cases: undo / tiny canvas ──────────────────────────────────────────
+
+function M.test_undo_to_empty_stack()
+  fresh()
+  -- undo snapshots are pushed by doc.mutate (add_fill bypasses it)
+  doc.mutate(function()
+    local a = doc.new_layer("fill", "red")
+    a.params.type = "solid"
+    a.params.c0 = { r = 255, g = 0, b = 0, a = 255 }
+    doc.add_layer(a)
+  end, "Add red")
+  doc.mutate(function()
+    local b = doc.new_layer("fill", "green")
+    b.params.type = "solid"
+    b.params.c0 = { r = 0, g = 255, b = 0, a = 255 }
+    doc.add_layer(b)
+  end, "Add green")
+  t.true_(undo.can_undo(), "undo available")
+  t.true_(undo.do_undo(), "undo removes top")
+  t.true_(undo.do_undo(), "undo removes first")
+  local img = render.composite(nil, { 16, 16 }, doc._cache)
+  t.eq(img, nil, "undo to empty → composite nil")
+  t.true_(undo.do_redo(), "redo restores first fill")
+  local img2 = render.composite(nil, { 16, 16 }, doc._cache)
+  t.all_pixels(img2, 255, 0, 0, 255, "redo → red fill back")
+end
+
+function M.test_canvas_1x1_all_layer_types()
+  fresh()
+  doc.canvas = { 1, 1 }
+  for _, ty in ipairs({ "fill", "noise", "grade", "palette", "seamless",
+                        "downscale", "paint", "export", "group" }) do
+    local l = doc.new_layer(ty)
+    if ty == "fill" then
+      l.params.type = "solid"
+      l.params.c0 = { r = 255, g = 0, b = 0, a = 255 }
+    elseif ty == "downscale" then
+      l.params.size = { 1, 1 }
+    end
+    doc.add_layer(l)
+  end
+  -- image layer with a real 1×1 asset as the top layer
+  doc._asset_cache["one"] = tex.new(1, 1, { r = 9, g = 9, b = 9, a = 255 })
+  doc.assets["one"] = { file = "one.png", w = 1, h = 1 }
+  local im = doc.new_layer("image")
+  im.params.asset = "one"
+  doc.add_layer(im)
+  local img = render.composite(nil, { 1, 1 }, doc._cache)
+  t.true_(img ~= nil, "1×1 stack composites")
+  local w, h = tex.size(img)
+  t.eq(w, 1, "width 1")
+  t.eq(h, 1, "height 1")
+end
+
 return M
