@@ -15,7 +15,12 @@
         # texturewrangler is a 64-bit Windows PE cross-compiled with
         # mingw-w64 and run natively on the Windows host via WSLInterop
         # (no WSLg tax). Same proven pattern as teidraw/slopstudio/cosmic2d.
+        # NOTE: compilers come from `.buildPackages` (they run on the build
+        # host); LIBRARIES for the windows target come from the cross set
+        # itself (`pkgsCross.mingwW64.sdl3` — using `.buildPackages.sdl3`
+        # silently gives the LINUX sdl3 and drags pipewire's chain).
         mingw = pkgs.pkgsCross.mingwW64.buildPackages;
+        mingwPkgs = pkgs.pkgsCross.mingwW64;
 
         # ── Dear ImGui, pinned ≥1.92 ──────────────────────────────────────
         # nixpkgs ships 1.91.x; we pin 1.92.4 like teidraw (dynamic font
@@ -44,6 +49,7 @@
             mingw.binutils       # + windres for the icon resource
             gnumake
             pkg-config           # resolves sdl3 for `make linux`
+            python3              # tools/embed.py (fonts/icon → C arrays)
             stb                  # stb_image / stb_image_write (decode + export)
             lua5_4               # host lua: scripts + ad-hoc kernel checks
             git
@@ -67,9 +73,9 @@
 
             # SDL3 for the Windows cross target (DLL + import lib) and the
             # host SDL3 for the linux build (resolved via pkg-config).
-            export SDL3_CROSS_INC=${mingw.sdl3.dev}/include
-            export SDL3_CROSS_LIB=${mingw.sdl3}/lib
-            export SDL3_CROSS_DLL=${mingw.sdl3}/bin/SDL3.dll
+            export SDL3_CROSS_INC=${mingwPkgs.sdl3.dev}/include
+            export SDL3_CROSS_LIB=${mingwPkgs.sdl3}/lib
+            export SDL3_CROSS_DLL=${mingwPkgs.sdl3}/bin/SDL3.dll
 
             # mingw cross-compiler handles (used by editor/Makefile).
             export MINGW_CC=x86_64-w64-mingw32-gcc
