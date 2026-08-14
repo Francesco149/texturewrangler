@@ -10,6 +10,7 @@ autosave = require("autosave")
 export = require("export")
 import = require("import")
 panels = require("panels")
+perf = require("perf")
 
 for _, t in ipairs({ "image", "paint", "noise", "grade", "palette",
                      "downscale", "seamless", "fill", "group", "export" }) do

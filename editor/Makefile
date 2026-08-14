@@ -49,7 +49,10 @@ WIN_CXXFLAGS := $(CXXFLAGS_COMMON) -DUNICODE -D_UNICODE -D_WIN32_WINNT=0x0A00 \
   -I $(SDL3_CROSS_INC)
 WIN_LDFLAGS  := -static-libgcc -static-libstdc++ -mconsole
 # SDL3 cross import lib + the Win32 libs SDL3's .dll.a references
+# (-Wl,-Bstatic -lmcfgthread: mingw's pthread runtime linked in, so the
+# exe needs no libmcfgthread-2.dll on the target)
 WIN_LIBS := -L$(SDL3_CROSS_LIB) -lSDL3 \
+  -Wl,-Bstatic -lmcfgthread -Wl,-Bdynamic \
   -lgdi32 -limm32 -lole32 -loleaut32 -lversion -lwinmm -luuid -ldxgi -ld3d11 \
   -lsetupapi -lcomdlg32 -lshell32 -luser32 -lkernel32 -latomic
 
@@ -177,11 +180,15 @@ test-asan: asan
 run: linux-build
 	cd .. && ./build/texturewrangler
 
-# standalone windows folder: exe + SDL3.dll
+# standalone windows folder: exe + SDL3.dll + mingw runtime + the lua runtime
 package: win
 	mkdir -p $(BUILD)/texturewrangler-win64
+	rm -f $(BUILD)/texturewrangler-win64/SDL3.dll $(BUILD)/texturewrangler-win64/libmcfgthread-2.dll
 	cp $(OUT) $(BUILD)/texturewrangler-win64/
 	cp $(SDL3_CROSS_DLL) $(BUILD)/texturewrangler-win64/
+	cp $(MCFG_DLL) $(BUILD)/texturewrangler-win64/
+	rm -rf $(BUILD)/texturewrangler-win64/lua
+	cp -r ../editor/lua $(BUILD)/texturewrangler-win64/lua
 	@echo "packaged $(BUILD)/texturewrangler-win64/"
 
 clean:

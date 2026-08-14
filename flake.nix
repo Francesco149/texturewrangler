@@ -75,7 +75,12 @@
             # host SDL3 for the linux build (resolved via pkg-config).
             export SDL3_CROSS_INC=${mingwPkgs.sdl3.dev}/include
             export SDL3_CROSS_LIB=${mingwPkgs.sdl3}/lib
-            export SDL3_CROSS_DLL=${mingwPkgs.sdl3}/bin/SDL3.dll
+            export SDL3_CROSS_DLL=${mingwPkgs.sdl3.out}/bin/SDL3.dll
+            # mingw pthread runtime (linked dynamically by default): locate
+            # the dll through the cross compiler's own -L search dir
+            export MCFG_LIBDIR=$(x86_64-w64-mingw32-g++ -### -x c++ /dev/null -o /dev/null 2>&1 \
+              | tr ' ' '\n' | grep -m1 -oE '^-L/nix/store/[^ ]*mcfgthread[^ ]*/lib' | cut -c3-)
+            export MCFG_DLL=$(dirname "$MCFG_LIBDIR")/bin/libmcfgthread-2.dll
 
             # mingw cross-compiler handles (used by editor/Makefile).
             export MINGW_CC=x86_64-w64-mingw32-gcc

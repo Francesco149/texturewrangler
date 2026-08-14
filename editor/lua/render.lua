@@ -29,10 +29,12 @@ end
 function render.layer(l, size, below, cache)
   local impl = layer_impls[l.type]
   if not impl then return nil end
+  local t0 = os.clock()
   local ok, out, newsize = pcall(impl.render, l, size, below, cache)
-  if not ok then
+  if ok then
+    perf.add_layer(l.type, (os.clock() - t0) * 1000)
+  else
     tw.log_error(("layer %q (%s): %s"):format(l.name or "?", l.type, tostring(out)))
-    return nil
   end
   return out, newsize
 end
@@ -88,9 +90,12 @@ end
 
 -- full / partial composite of the document stack
 function render.composite(limit_idx, size0, cache)
-  return composite_list(doc.layers, limit_idx, size0,
-                        cache or doc._cache,
-                        doc._in_flight and doc.stack_index(doc._in_flight))
+  local t0 = os.clock()
+  local img = composite_list(doc.layers, limit_idx, size0,
+                             cache or doc._cache,
+                             doc._in_flight and doc.stack_index(doc._in_flight))
+  perf.comp_ms = (os.clock() - t0) * 1000
+  return img
 end
 
 -- 36px thumbnail of the partial composite at layer stack index i

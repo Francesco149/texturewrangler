@@ -135,7 +135,8 @@ function panels.toolbar(rect)
     local io = ig.get_io()
     local fps = io.delta_time > 0 and math.floor(1 / io.delta_time) or 0
     local sz = string.format("%d×%d", doc.canvas[1], doc.canvas[2])
-    local info = sz .. "  ·  " .. fps .. " fps"
+    local info = sz .. "  ·  " .. fps .. " fps  ·  comp " ..
+                 string.format("%.1f", perf.comp_ms) .. " ms"
     local tw_ = ig.calc_text_size(info)
     ig.set_cursor_pos(rect.w - tw_ - 14, 8)
     ig.text_colored(info, 0.45, 0.47, 0.52, 1)

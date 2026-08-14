@@ -43,11 +43,18 @@ function console.frame()
     local code = console.input
     console.input = ""
     console.log_line("> " .. code)
-    local ok, res = tw.app.eval(code)
-    if not ok then
-      console.log_line("ERROR: " .. res)
-    elseif res ~= "" then
-      console.log_line(res)
+    if code == "perf" then
+      console.log_line(string.format("frame %.2f ms  comp %.2f ms",
+                                     perf.frame_ms, perf.comp_ms))
+      for _, l in ipairs(perf.breakdown()) do console.log_line(l) end
+      console.scroll_bottom = true
+    else
+      local ok, res = tw.app.eval(code)
+      if not ok then
+        console.log_line("ERROR: " .. res)
+      elseif res ~= "" then
+        console.log_line(res)
+      end
     end
   end
 end

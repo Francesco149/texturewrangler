@@ -129,14 +129,21 @@ int file_mkdirs(const char* path) {
   snprintf(tmp, sizeof(tmp), "%s", path);
   size_t len = strlen(tmp);
   if (len == 0) return -1;
+#ifdef _WIN32
+#define MKDIR(p) mkdir(p)
+#else
+#define MKDIR(p) mkdir(p, 0755)
+#endif
   for (size_t i = 1; i < len; i++) {
     if (tmp[i] == '/' || tmp[i] == '\\') {
       tmp[i] = 0;
-      mkdir(tmp, 0755);
+      MKDIR(tmp);
       tmp[i] = '/';
     }
   }
-  return mkdir(tmp, 0755) == 0 ? 0 : (file_exists(tmp) ? 0 : -1);
+  int rc = MKDIR(tmp);
+#undef MKDIR
+  return rc == 0 ? 0 : (file_exists(tmp) ? 0 : -1);
 }
 
 int file_copy(const char* src, const char* dst) {
@@ -160,11 +167,19 @@ int file_exists(const char* path) {
   return stat(path, &st) == 0;
 }
 
-// ── path helpers (static buffers) ───────────────────────────────────────────
+// ── path helpers (small rotating buffers so nested calls don't clobber) ─────
+
+static char* path_buf(void) {
+  static char bufs[8][2048];
+  static int idx = 0;
+  char* b = bufs[idx];
+  idx = (idx + 1) % 8;
+  return b;
+}
 
 const char* path_dirname(const char* p) {
-  static char buf[2048];
-  snprintf(buf, sizeof(buf), "%s", p);
+  char* buf = path_buf();
+  snprintf(buf, 2048, "%s", p);
   char* slash = strrchr(buf, '/');
 #ifdef _WIN32
   char* bslash = strrchr(buf, '\\');
@@ -184,8 +199,18 @@ const char* path_dirname(const char* p) {
 }
 
 const char* path_join(const char* a, const char* b) {
-  static char buf[2048];
-  snprintf(buf, sizeof(buf), "%s/%s", a, b);
+  char* buf = path_buf();
+  // guard against a/b aliasing the destination slot (nested joins)
+  char ta[2048], tb[2048];
+  if (a >= buf && a < buf + 2048) {
+    snprintf(ta, sizeof(ta), "%s", a);
+    a = ta;
+  }
+  if (b >= buf && b < buf + 2048) {
+    snprintf(tb, sizeof(tb), "%s", b);
+    b = tb;
+  }
+  snprintf(buf, 2048, "%s/%s", a, b);
   return buf;
 }
 

@@ -17,6 +17,7 @@ preview = require("preview")
 console = require("console")
 picker = require("picker")
 theme = require("theme")
+perf = require("perf")
 layer_panel = require("panel_layers")
 props_panel = require("panel_props")
 palette_panel = require("panel_palette")
@@ -69,6 +70,41 @@ function tw.reload()
     return m
   end)
   if not ok then tw.log_error("reload failed: " .. tostring(err)) end
+end
+
+-- headless script: texturewrangler --lua <file.lua> [--project <dir>]
+local lua_script = arg_value("--lua")
+if lua_script then
+  local f = io.open(lua_script, "r")
+  if f then
+    local code = f:read("*a")
+    f:close()
+    local chunk, lerr = load(code, lua_script)
+    if not chunk then
+      tw.log_error("script load: " .. tostring(lerr))
+      os.exit(1)
+    end
+    local ok, rerr = pcall(chunk)
+    if not ok then
+      tw.log_error("script: " .. tostring(rerr))
+      os.exit(1)
+    end
+  else
+    tw.log_error("cannot open script: " .. lua_script)
+    os.exit(1)
+  end
+  os.exit(0)
+end
+
+-- headless export: texturewrangler --project <dir> --export
+local export_mode = false
+for i = 1, #tw.args do
+  if tw.args[i] == "--export" then export_mode = true end
+end
+if export_mode then
+  local n = export.all()
+  tw.log("exported " .. n .. " file(s)")
+  os.exit(0)
 end
 
 -- ── frame ───────────────────────────────────────────────────────────────────
@@ -129,6 +165,7 @@ end
 
 function tw.frame()
   frame_n = frame_n + 1
+  local t0 = os.clock()
   theme.apply()
   console.poll_logs()
   local ok, err = pcall(function()
@@ -144,6 +181,8 @@ function tw.frame()
   doc._coalescing = false
   autosave.tick(frame_n)
   theme.frame_end()
+  perf.tick((os.clock() - t0) * 1000, perf.comp_ms)
+  perf.draw_overlay(12, 40)
 end
 
 tw.log("texturewrangler lua ready")

@@ -158,16 +158,11 @@ function preview.frame(rect)
   local py = y0 + (avail_h - img_h) / 2 + st.oy
 
   local dl = ig.get_window_draw_list()
-  -- checkerboard behind the image area
+  -- checkerboard behind the image area: ONE stretched draw (nearest
+  -- sampling keeps 16px cells chunky) — was ~4000 AddImage calls/frame
   local cb = checkerboard()
   ig.dl_push_clip_rect(dl, x0, y0, x0 + avail_w, y0 + avail_h, true)
-  for cy = 0, math.ceil(avail_h / 16) do
-    for cx = 0, math.ceil(avail_w / 16) do
-      ig.dl_add_image(dl, cb, x0 + cx * 16, y0 + cy * 16,
-                      x0 + (cx + 1) * 16, y0 + (cy + 1) * 16,
-                      0, 0, 1, 1)
-    end
-  end
+  ig.dl_add_image(dl, cb, x0, y0, x0 + avail_w, y0 + avail_h, 0, 0, 1, 1)
   -- the image (tiled n×n)
   for ty = 0, n - 1 do
     for tx = 0, n - 1 do

@@ -111,15 +111,6 @@ local function row(l, depth, in_flight)
   local hit = ig.selectable(l.name .. "##" .. l.id, selected, 0, w - 62, row_h - 6)
   if hit then panels.set_selected(l.id) end
 
-  -- row bg for selection
-  if selected or ig.is_item_hovered() then
-    local dl = ig.get_window_draw_list()
-    local p = ig.get_cursor_screen_pos()
-    ig.dl_add_rect_filled(dl, x0, y0, x0 + w, y0 + row_h,
-                          selected and 0.25 or 0.16, selected and 0.30 or 0.18,
-                          selected and 0.38 or 0.22, 1)
-  end
-
   -- type badge on the right (drawlist text at SCREEN coords — avoids
   -- SetCursorPos extending the child bounds)
   local dl2 = ig.get_window_draw_list()

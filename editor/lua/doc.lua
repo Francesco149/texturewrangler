@@ -282,6 +282,10 @@ function doc.deserialize(t)
   doc.clear_caches()
   doc.dirty = false
   doc.loaded = true
+  -- default selection: the top-most root layer
+  if #doc.layers > 0 and not panels.selected() then
+    panels.set_selected(doc.layers[#doc.layers].id)
+  end
 end
 
 function doc.save()

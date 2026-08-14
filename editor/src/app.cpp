@@ -280,6 +280,7 @@ int app_main(int argc, char** argv) {
     ImFontConfig cfg;
     cfg.OversampleH = cfg.OversampleV = 2;
     cfg.PixelSnapH = true;
+    cfg.FontDataOwnedByAtlas = false; // embedded static arrays, never free
     ImFont* ui = io.Fonts->AddFontFromMemoryTTF((void*)font_ui, font_ui_len,
                                                 16.0f, &cfg);
     ImFont* title = io.Fonts->AddFontFromMemoryTTF((void*)font_ui, font_ui_len,

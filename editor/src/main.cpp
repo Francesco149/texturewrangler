@@ -33,10 +33,9 @@ static const char* find_lua_dir(const char* argv0) {
                           path_join(path_join(path_join(exe, ".."), ".."),
                                     "editor/lua")};
   for (const char* c : cands) {
-    if (file_exists(path_join(c, "main.lua"))) {
-      snprintf(dir, sizeof(dir), "%s", c);
-      return dir;
-    }
+    // snapshot into dir BEFORE path_join may clobber the ring slot c
+    snprintf(dir, sizeof(dir), "%s", c);
+    if (file_exists(path_join(c, "main.lua"))) return dir;
   }
   const char* root = getenv("TW_ROOT");
   if (root) {
@@ -61,10 +60,11 @@ int main(int argc, char** argv) {
     // headless screenshot: offscreen SDL driver, no window stealing
 #ifdef _WIN32
     _putenv("SDL_VIDEODRIVER=offscreen");
+    _putenv("TW_SHOT=1");
 #else
     setenv("SDL_VIDEODRIVER", "offscreen", 1);
-#endif
     setenv("TW_SHOT", "1", 1);
+#endif
   }
 
   lua_init(find_lua_dir(argv[0]), argc, argv);
