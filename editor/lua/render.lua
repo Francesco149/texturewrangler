@@ -45,43 +45,54 @@ local function composite_list(layers, limit_idx, size0, cache, force_from)
   local size = { size0[1], size0[2] }
   for i, l in ipairs(layers) do
     if limit_idx and i > limit_idx then break end
-    local forced = force_from and i >= force_from
     local token = (doc._ver[l.id] or 0) * 131 + size[1] * 7 + size[2]
-    local c = cache and cache[l.id]
-    if not forced and c and c.token == token and c.size[1] == size[1] and
-       c.size[2] == size[2] then
-      img = c.img
-    else
-      if c and c.texid then pcall(tw.gfx.release, c.texid) end
-      local out, newsize = render.layer(l, size, img, cache)
-      if out then
-        if l.type == "downscale" or
-           (l.type == "group" and l.params.include_below) then
-          -- downscale / include-below group: the output IS the composite
-          img = out
-        elseif l.blend == "alphamask" and l.params.scope == "below" and i >= 2 then
-          -- mask applies to the single layer directly below: its output is
-          -- multiplied by this layer's alpha, then composited normally
-          -- over the stack up to i-2.
-          local below = cache and cache[layers[i - 1].id]
-          local below_out = below and below.out
-          if below_out then
-            local masked = tex.blend(below_out, out, "alphamask", l.opacity or 1)
-            img = (i >= 3 and cache and cache[layers[i - 2].id] and
-                   cache[layers[i - 2].id].img) or nil
-            img = img and tex.blend(img, masked, "normal", 1) or masked
-          else
-            img = tex.blend(img, out, "alphamask", l.opacity or 1)
-          end
-        else
-          img = img and tex.blend(img, out, l.blend or "normal", l.opacity or 1)
-                   or out
-        end
-      end
-      if newsize then size = newsize end
+    if not l.visible then
+      -- hidden: contributes nothing, and must NOT change the working size
+      -- (a hidden downscale keeps the stack at its current size) or the
+      -- composite below. Cache the unchanged entry so the chain stays
+      -- consistent and unhiding re-renders on the next bump.
       if cache then
         cache[l.id] = { token = token, img = img, size = { size[1], size[2] },
-                        out = out }
+                        out = nil }
+      end
+    else
+      local forced = force_from and i >= force_from
+      local c = cache and cache[l.id]
+      if not forced and c and c.token == token and c.size[1] == size[1] and
+         c.size[2] == size[2] then
+        img = c.img
+      else
+        if c and c.texid then pcall(tw.gfx.release, c.texid) end
+        local out, newsize = render.layer(l, size, img, cache)
+        if out then
+          if l.type == "downscale" or
+             (l.type == "group" and l.params.include_below) then
+            -- downscale / include-below group: the output IS the composite
+            img = out
+          elseif l.blend == "alphamask" and l.params.scope == "below" and i >= 2 then
+            -- mask applies to the single layer directly below: its output is
+            -- multiplied by this layer's alpha, then composited normally
+            -- over the stack up to i-2.
+            local below = cache and cache[layers[i - 1].id]
+            local below_out = below and below.out
+            if below_out then
+              local masked = tex.blend(below_out, out, "alphamask", l.opacity or 1)
+              img = (i >= 3 and cache and cache[layers[i - 2].id] and
+                     cache[layers[i - 2].id].img) or nil
+              img = img and tex.blend(img, masked, "normal", 1) or masked
+            else
+              img = tex.blend(img, out, "alphamask", l.opacity or 1)
+            end
+          else
+            img = img and tex.blend(img, out, l.blend or "normal", l.opacity or 1)
+                     or out
+          end
+        end
+        if newsize then size = newsize end
+        if cache then
+          cache[l.id] = { token = token, img = img, size = { size[1], size[2] },
+                          out = out }
+        end
       end
     end
   end
@@ -112,14 +123,23 @@ function render.layer_only(id, size)
   return render.layer(l, size, nil, nil)
 end
 
--- re-upload a cached image to the GPU, returning texid (creating as needed)
+-- re-upload a cached image to the GPU, returning texid (creating as needed).
+-- Kernels return fresh images and cached composites are reused by identity,
+-- so a texid is only re-uploaded when the img userdata changed — previously
+-- EVERY frame re-uploaded the full composite (4 MB at 1024×1024; the old
+-- ~3000 fps host made that a 12 GB/s stream). In-flight paint strokes
+-- produce fresh images each frame, so they still show same-frame.
 function render.texid_for(cache, id, img)
   local e = cache[id]
   if not e or not e.img or e.img ~= img then return nil end
   if e.texid then
-    e.texid = tw.gfx.update(e.texid, img)
+    if e.texid_img ~= img then
+      e.texid = tw.gfx.update(e.texid, img)
+      e.texid_img = img
+    end
   else
     e.texid = tw.gfx.register(img)
+    e.texid_img = img
   end
   return e.texid
 end

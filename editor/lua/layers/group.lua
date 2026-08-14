@@ -16,7 +16,15 @@ function M.render(l, size, below, cache)
     for i, cl in ipairs(children) do
       local token = (doc._ver[cl.id] or 0) * 131 + csize[1] * 7 + csize[2]
       local c = cache and cache[cl.id]
-      if c and c.token == token and c.size[1] == csize[1] and c.size[2] == csize[2] then
+      if not cl.visible then
+        -- hidden child: contributes nothing; keep the entry size and the
+        -- accumulated composite (a hidden downscale must NOT resize).
+        if cache then
+          cache[cl.id] = { token = token, img = img, size = { csize[1], csize[2] },
+                           out = nil }
+        end
+      elseif c and c.token == token and c.size[1] == csize[1] and
+             c.size[2] == csize[2] then
         img = c.img
       else
         if c and c.texid then pcall(tw.gfx.release, c.texid) end
