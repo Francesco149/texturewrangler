@@ -38,9 +38,10 @@ function M.panel(l, ui)
     p.colors = math.floor(v)
     p.palette = nil -- regenerate on color-count change
   end)
-  ui.same_line()
+  -- quick size buttons on their own line BELOW the slider (they used to
+  -- share the slider's line and crowd it)
   for _, q in ipairs(quick) do
-    if ui.small_button(q[2]) then
+    if ui.small_button(q[2] .. "²") then
       ui.mutate(function()
         p.colors = q[1]
         p.palette = nil
@@ -50,8 +51,10 @@ function M.panel(l, ui)
   end
   ui.new_line()
   ui.combo("Dither", DITHERS, p.dither, function(v) p.dither = v end)
+  -- 1-based combo index -> 0/1 param (was storing 1/2, so "Keep alpha"
+  -- could never be re-selected)
   ui.combo("Alpha", { "Keep alpha", "Quantize RGBA" }, p.alpha_mode or 0,
-           function(v) p.alpha_mode = v end)
+           function(v) p.alpha_mode = v - 1 end)
   if ui.button("Regenerate palette") then
     ui.mutate(function() p.palette = nil end, "Regenerate palette")
   end

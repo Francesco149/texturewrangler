@@ -109,6 +109,9 @@ function M.panel(l, ui)
   end
   names[#names + 1] = "(none)"
   layers[#layers + 1] = nil
+  -- ui.combo clamps 0 -> 1, which would show the FIRST layer as the brush
+  -- even though no stamp is set; point an empty selection at "(none)".
+  if current == 0 then current = #layers end
   ui.combo("Brush source", names, current, function(v)
     ui.mutate(function() p.stamp_layer = layers[v] end, "Brush source")
   end)

@@ -182,10 +182,13 @@ function preview.frame(rect)
                  0.25, 0.27, 0.32, 1, 0, 1)
   ig.dl_pop_clip_rect(dl)
 
-  -- paint input (selected layer is a paint layer, click in canvas)
+  -- paint input (selected layer is a paint layer, click in canvas).
+  -- NOTE: io.want_capture_mouse is NOT a usable gate — imgui 1.92 sets it
+  -- whenever ANY window is hovered, which is always true over the app, so
+  -- paint never fired. The in_canvas check is the real guard.
   local sel = panels.selected()
   local sel_layer = sel and doc.get_layer(sel)
-  if sel_layer and sel_layer.type == "paint" and not io.want_capture_mouse then
+  if sel_layer and sel_layer.type == "paint" then
     local mx, my = ig.get_mouse_pos()
     local in_canvas = mx >= px and mx < px + img_w and my >= py and my < py + img_h
     if ig.is_mouse_clicked(0) and in_canvas and not ig.is_mouse_dragging(2) and

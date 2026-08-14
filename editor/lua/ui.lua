@@ -30,15 +30,22 @@ function ui.new(ctx)
 
   function u.combo(label, items, current, on_change)
     local idx = 1
-    if type(current) == "number" then
-      idx = math.max(1, math.min(#items, math.floor(current)))
-    else
+    local is_string = type(current) == "string"
+    if is_string then
       for i, v in ipairs(items) do
         if v == current then idx = i; break end
       end
+    else
+      idx = math.max(1, math.min(#items, math.floor(current)))
     end
     local changed, new = ig.combo(label, items, idx - 1)
-    if changed then u.coalesce(function() on_change(new + 1) end) end
+    if changed then
+      u.coalesce(function()
+        -- string params (e.g. filter/dither names) get the string back;
+        -- numeric params (0/1 flags) keep the documented 1-based index
+        on_change(is_string and items[new + 1] or new + 1)
+      end)
+    end
   end
 
   function u.slider(label, v, min, max, on_change)

@@ -37,7 +37,7 @@ end
 
 local defaults = {
   image = { asset = nil, filter = "bilinear", offset = { 0, 0 } },
-  paint = { color = { r = 255, g = 255, b = 255, a = 255 }, size = 6,
+  paint = { color = { r = 235, g = 158, b = 89, a = 255 }, size = 6,
             hardness = 0.5, eraser = false, stamp_layer = nil,
             palette_lock = false, strokes = {} },
   noise = { type = "value", scale = 8, octaves = 1, seed = 1,
@@ -50,6 +50,7 @@ local defaults = {
   palette = { colors = 16, method = "mediancut", dither = "none",
               alpha_mode = 0, palette = nil },
   downscale = { size = { 64, 64 }, filter = "aniso" },
+  crop = { x = 0, y = 0, w = 0, h = 0 },
   seamless = { blend = 8, mode = "offset" },
   fill = { type = "solid", c0 = { r = 255, g = 255, b = 255, a = 255 },
            c1 = { r = 0, g = 0, b = 0, a = 0 }, angle = 0,
@@ -61,7 +62,7 @@ local defaults = {
 doc.type_names = {
   image = "Image", paint = "Paint", noise = "Noise", grade = "Grade",
   palette = "Palette", downscale = "Downscale", seamless = "Seamless",
-  fill = "Fill", group = "Group", export = "Export",
+  fill = "Fill", group = "Group", export = "Export", crop = "Crop",
 }
 
 local function deepcopy(t)
