@@ -19,13 +19,16 @@ end
 -- ── geometry ────────────────────────────────────────────────────────────────
 
 local TOP_H = 34
+local COLLAPSED_H = 26 -- collapsed bottom panel: title bar only
+
+panels.collapsed = { ["##console"] = true } -- console starts collapsed
 
 function panels.rects()
   local io = ig.get_io()
   local w, h = io.display_w, io.display_h
   local lw = panels.layout.left_w
   local rw = panels.layout.right_w
-  local bh = panels.layout.bottom_h
+  local bh = panels.collapsed["##console"] and COLLAPSED_H or panels.layout.bottom_h
   local top = TOP_H
   local R = function(x, y, w2, h2)
     return { x = x, y = y, w = w2, h = h2 }
@@ -39,7 +42,8 @@ function panels.rects()
   }
 end
 
--- splitter drag handling; call before computing rects
+-- splitter drag handling; call before computing rects. Also tracks the
+-- hovered splitter so the UI can highlight the resize handle.
 function panels.tick_splitters()
   local io = ig.get_io()
   local dw, dh = io.display_w, io.display_h
@@ -65,6 +69,34 @@ function panels.tick_splitters()
     end
     if not ig.is_mouse_down(0) then l.drag = nil end
   end
+  -- hover highlight (not while dragging another splitter)
+  l.hover = nil
+  if not l.drag and not ig.is_mouse_down(0) then
+    if math.abs(mx - (r.left.x + r.left.w)) < 5 then l.hover = "left"
+    elseif math.abs(mx - r.right.x) < 5 then l.hover = "right"
+    elseif math.abs(my - r.bottom.y) < 5 then l.hover = "bottom" end
+  end
+end
+
+-- draw the accent bar over the hovered/dragged splitter (call inside
+-- the ##main window, after the panels)
+function panels.draw_splitter_highlight()
+  local r = panels.rects()
+  local l = panels.layout
+  local h = l.drag or l.hover
+  if not h then return end
+  local dl = ig.get_window_draw_list()
+  local a = 1.0
+  if h == "left" then
+    ig.dl_add_rect_filled(dl, r.left.x + r.left.w - 2, r.top.h,
+                          r.left.x + r.left.w + 2, r.center.h, 0.92, 0.62, 0.35, a)
+  elseif h == "right" then
+    ig.dl_add_rect_filled(dl, r.right.x - 2, r.top.h, r.right.x + 2, r.center.h,
+                          0.92, 0.62, 0.35, a)
+  elseif h == "bottom" then
+    ig.dl_add_rect_filled(dl, 0, r.bottom.y - 2, r.bottom.w, r.bottom.y + 2,
+                          0.92, 0.62, 0.35, a)
+  end
 end
 
 -- ── panel chrome ────────────────────────────────────────────────────────────
@@ -89,6 +121,20 @@ function panels.begin(id, rect, title, opts)
     dl_add_rect_filled(dl, rect.x, y0 + 24, rect.x + rect.w, y0 + 26, 0.92, 0.62, 0.35, 1)
     ig.set_cursor_pos(8, 5)
     ig.text(title)
+    if opts.collapsible then
+      local collapsed = panels.collapsed[id]
+      local cx = rect.w - 26
+      ig.set_cursor_pos(cx, 4)
+      if ig.small_button(collapsed and "+" or "-") then
+        panels.collapsed[id] = not collapsed
+      end
+      if collapsed then
+        -- title bar only; body skipped. end_() must not end the child again.
+        panels._auto_ended = true
+        ig.end_child()
+        return false
+      end
+    end
     if opts.header then
       local w = rect.w
       -- run the header action at the right side
@@ -103,6 +149,10 @@ function panels.begin(id, rect, title, opts)
 end
 
 function panels.end_()
+  if panels._auto_ended then
+    panels._auto_ended = false
+    return
+  end
   ig.end_child()
 end
 
@@ -116,32 +166,35 @@ function panels.toolbar(rect)
   local dl = ig.get_window_draw_list()
   panels.dl_rect(dl, rect.x, rect.y, rect.x + rect.w, rect.y + rect.h,
                  0.07, 0.073, 0.09, 1)
-  ig.set_cursor_pos(10, 8)
+  ig.set_cursor_pos(10, 3)
   if doc.loaded then
+    -- NOTE: ig.same_line(n) is an ABSOLUTE x offset from the window's left
+    -- edge (imgui 1.92 SameLine semantics), not a spacing. The buttons are
+    -- placed with same_line() (relative) after the name, which is measured
+    -- so a long project name never collides with Undo/Redo. The old
+    -- same_line(20) put Import at absolute x=20 — on top of the name.
     ig.push_font(1)
     local name_w = ig.calc_text_size(doc.name) -- width under the title font
     ig.text(doc.name)
     ig.pop_font()
-    -- buttons follow the name at its actual width (a long project name used
-    -- to run past the fixed 140px and collide with Undo/Redo)
     ig.same_line(name_w + 24)
     if ig.button("Undo") then undo.do_undo() end
     ig.same_line()
     if ig.button("Redo") then undo.do_redo() end
-    ig.same_line(20)
+    ig.same_line()
     if ig.button("Import (Ctrl+U)") then import.open_dialog() end
     ig.same_line()
     if ig.button("Export (Ctrl+E)") then export.all() end
     ig.same_line()
-    if ig.button("Project") then panels.state.show_project = not panels.state.show_project end
-    -- right side: status info
+    if ig.button("Project") then panels.state.project_popup = true end
+    -- right side: status info (aligned with the button text baseline)
     local io = ig.get_io()
     local fps = io.delta_time > 0 and math.floor(1 / io.delta_time) or 0
     local sz = string.format("%d×%d", doc.canvas[1], doc.canvas[2])
     local info = sz .. "  ·  " .. fps .. " fps  ·  comp " ..
                  string.format("%.1f", perf.comp_ms) .. " ms"
     local tw_ = ig.calc_text_size(info)
-    ig.set_cursor_pos(rect.w - tw_ - 14, 8)
+    ig.set_cursor_pos(rect.w - tw_ - 14, 9)
     ig.text_colored(info, 0.45, 0.47, 0.52, 1)
   else
     ig.push_font(1)
