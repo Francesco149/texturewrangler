@@ -119,9 +119,12 @@ function panels.toolbar(rect)
   ig.set_cursor_pos(10, 8)
   if doc.loaded then
     ig.push_font(1)
+    local name_w = ig.calc_text_size(doc.name) -- width under the title font
     ig.text(doc.name)
     ig.pop_font()
-    ig.same_line(140)
+    -- buttons follow the name at its actual width (a long project name used
+    -- to run past the fixed 140px and collide with Undo/Redo)
+    ig.same_line(name_w + 24)
     if ig.button("Undo") then undo.do_undo() end
     ig.same_line()
     if ig.button("Redo") then undo.do_redo() end

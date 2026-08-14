@@ -110,6 +110,12 @@ static int l_dummy(lua_State* L) {
   ImGui::Dummy(ImVec2((float)luaL_checknumber(L, 1), (float)luaL_checknumber(L, 2)));
   return 0;
 }
+static int l_invisible_button(lua_State* L) {
+  lua_pushboolean(L, ImGui::InvisibleButton(luaL_checkstring(L, 1),
+                                            ImVec2((float)luaL_checknumber(L, 2),
+                                                   (float)luaL_checknumber(L, 3))));
+  return 1;
+}
 static int l_indent(lua_State* L) {
   ImGui::Indent((float)luaL_optnumber(L, 1, 0));
   return 0;
@@ -775,6 +781,7 @@ void ig_register(lua_State* L) {
   REG(separator);
   REG(spacing);
   REG(dummy);
+  REG(invisible_button);
   REG(indent);
   REG(unindent);
   REG(text);

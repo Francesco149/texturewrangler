@@ -85,9 +85,28 @@ local function row(l, depth, in_flight)
   local avail_w = ig.get_content_region_avail()
   local selected = panels.selected() == l.id
 
+  -- The body is pcall'd so push_id ALWAYS balances even when it throws:
+  -- an unbalanced ID stack corrupts imgui's state and asserts next frame.
   ig.push_id(l.id)
+  local ok, err = pcall(function()
   local w = avail_w
   local row_h = ROW_H
+
+  -- drag handle (≡) at the row's left edge — explicit reorder affordance.
+  -- A real item (invisible button) so it doesn't overlap the eye toggle;
+  -- the existing doc._drag mechanism does the actual reorder/move.
+  local HW = 20
+  ig.invisible_button("##h" .. l.id, HW, row_h)
+  local handle_hover = ig.is_item_hovered()
+  if not doc._drag and handle_hover and ig.is_mouse_dragging(0) and not in_flight then
+    doc._drag = { id = l.id, y0 = y0 }
+  end
+  local dlh = ig.get_window_draw_list()
+  local hl = handle_hover and 0.62 or 0.42
+  ig.dl_add_line(dlh, x0 + 6, y0 + 11, x0 + 14, y0 + 11, hl, hl, hl, 1, 1.5)
+  ig.dl_add_line(dlh, x0 + 6, y0 + 16, x0 + 14, y0 + 16, hl, hl, hl, 1, 1.5)
+  ig.dl_add_line(dlh, x0 + 6, y0 + 21, x0 + 14, y0 + 21, hl, hl, hl, 1, 1.5)
+  ig.same_line()
 
   -- visibility eye
   local vch, vv = ig.checkbox("##v" .. l.id, l.visible)
@@ -96,19 +115,20 @@ local function row(l, depth, in_flight)
   end
   ig.same_line()
 
-  -- thumbnail
+  -- thumbnail (shifted right by handle width + one ItemSpacing)
+  local thumb_x = x0 + 24 + HW + 6
   local thumb = render.thumb(doc.stack_index(l.id))
   local tid = thumb and render.texid_for(doc._thumb_cache, l.id, thumb)
   if tid then
     ig.dl_add_image(ig.get_window_draw_list(), tid,
-                    x0 + 24, y0 + 3, x0 + 24 + 28, y0 + 31, 0, 0, 1, 1)
+                    thumb_x, y0 + 3, thumb_x + 28, y0 + 31, 0, 0, 1, 1)
   end
   ig.dummy(32, 28)
   ig.same_line()
 
-  -- name / type selectable
-  ig.set_next_item_width(w - 60)
-  local hit = ig.selectable(l.name .. "##" .. l.id, selected, 0, w - 62, row_h - 6)
+  -- name / type selectable (width shrunk so it still ends at the row edge)
+  ig.set_next_item_width(w - 86)
+  local hit = ig.selectable(l.name .. "##" .. l.id, selected, 0, w - 88, row_h - 6)
   if hit then panels.set_selected(l.id) end
 
   -- type badge on the right (drawlist text at SCREEN coords — avoids
@@ -171,7 +191,9 @@ local function row(l, depth, in_flight)
     doc._drag = nil
   end
 
+  end)
   ig.pop_id()
+  if not ok then error(err, 0) end
 
   -- children (groups)
   if l.children and #l.children > 0 then

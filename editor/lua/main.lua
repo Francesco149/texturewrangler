@@ -126,15 +126,23 @@ local function panel(id, rect, title, fn, opts)
   panels.end_()
 end
 
+-- fullscreen undecorated main window: all panels dock as children. Shared
+-- by the editor and the picker — a BeginChild without a parent Begin would
+-- otherwise get imgui's auto-created Debug##Default window (unthemed chrome).
+local MAIN_FLAGS = ig.wflag.NoTitleBar + ig.wflag.NoResize + ig.wflag.NoMove +
+                   ig.wflag.NoScrollbar + ig.wflag.NoCollapse + ig.wflag.NoSavedSettings
+
+local function begin_main(w, h)
+  ig.set_next_window_pos(0, 0)
+  ig.set_next_window_size(w, h)
+  ig.begin("##main", MAIN_FLAGS)
+end
+
 local function editor_frame()
   panels.tick_splitters()
   local r = panels.rects()
 
-  -- fullscreen undecorated main window: all panels dock as children
-  ig.set_next_window_pos(0, 0)
-  ig.set_next_window_size(r.top.w + r.center.w + r.right.w, r.center.h + r.bottom.h + r.top.h)
-  ig.begin("##main", ig.wflag.NoTitleBar + ig.wflag.NoResize + ig.wflag.NoMove +
-                       ig.wflag.NoScrollbar + ig.wflag.NoCollapse + ig.wflag.NoSavedSettings)
+  begin_main(r.top.w + r.center.w + r.right.w, r.center.h + r.bottom.h + r.top.h)
   panels.toolbar(r.top)
 
   local layers_r, palette_r = split_v(r.left, 0.62)
@@ -172,7 +180,10 @@ function tw.frame()
     if doc.loaded then
       editor_frame()
     else
+      local io = ig.get_io()
+      begin_main(io.display_w, io.display_h)
       picker.frame()
+      ig.end_()
     end
   end)
   if not ok then

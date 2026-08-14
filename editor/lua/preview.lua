@@ -8,7 +8,7 @@ local ig = tw.ig
 
 preview.state = {
   mode = "final", -- "final" | "at" | "layer"
-  tile = true,
+  tiles = 2, -- 1×1 / 2×2 / 4×4 tiling (default 2×2)
   zoom = "fit", -- "fit" or pixel zoom factor
   zoom_val = 1,
   ox = 0,
@@ -44,7 +44,7 @@ local function view_image()
 end
 
 local function zoom_fit(avail_w, avail_h, img_w, img_h)
-  local n = preview.state.tile and 4 or 1
+  local n = preview.state.tiles or 2
   local s = math.min(avail_w / (img_w * n), avail_h / (img_h * n))
   return math.max(0.01, s)
 end
@@ -91,8 +91,10 @@ function preview.frame(rect)
     preview.state.mode = ({ "final", "at", "layer" })[mi + 1]
   end
   ig.same_line()
-  local tch, tv = ig.checkbox("4×4 tile", preview.state.tile)
-  if tch then preview.state.tile = tv end
+  local tiles_opts = { "1×1", "2×2", "4×4" }
+  local ti = ({ [1] = 1, [2] = 2, [4] = 3 })[preview.state.tiles] or 2
+  local tch, tnew = ig.combo("##tiles", tiles_opts, ti - 1)
+  if tch then preview.state.tiles = ({ 1, 2, 4 })[tnew + 1] end
   ig.same_line()
   local zooms = { "Fit", "1×", "2×", "4×" }
   local zi = ({ fit = 1, ["1"] = 2, ["2"] = 3, ["4"] = 4 })[preview.state.zoom] or 1
@@ -101,13 +103,16 @@ function preview.frame(rect)
     preview.state.zoom = ({ "fit", "1", "2", "4" })[znew + 1]
     preview.state.zoom_val = ({ 0, 1, 2, 4 })[znew + 1]
   end
-  -- right-aligned info on the header row
-  local info = string.format("%d×%d  ·  %s", w, h,
-                             ({ final = "final", at = "at layer", layer = "layer only" })[preview.state.mode])
+  -- right-aligned info on the header row. Compact: size only (the view mode
+  -- is already visible in the mode combo). Skipped when the panel is too
+  -- narrow — a long "1024×1024 · final" used to overlap the zoom combo.
+  local info = string.format("%d×%d", w, h)
   local itw = ig.calc_text_size(info)
   local avail = ig.get_content_region_avail()
-  ig.same_line(avail - itw - 8)
-  ig.text_colored(info, 0.45, 0.47, 0.52, 1)
+  if avail - itw > 120 then
+    ig.same_line(avail - itw - 8)
+    ig.text_colored(info, 0.45, 0.47, 0.52, 1)
+  end
 
   -- content area below the header
   local cw, ch = ig.get_content_region_avail()
@@ -124,7 +129,7 @@ function preview.frame(rect)
   else
     scale = st.zoom_val
   end
-  local n = st.tile and 4 or 1
+  local n = st.tiles or 2
   local img_w, img_h = w * n * scale, h * n * scale
 
   -- ctrl+wheel zoom at cursor

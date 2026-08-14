@@ -19,8 +19,11 @@ function M.panel(l, ui)
   ui.slider("Scale", p.scale, 1, 256, function(v) p.scale = v end)
   ui.slider("Octaves", p.octaves, 1, 6, function(v) p.octaves = math.floor(v) end)
   ui.slider("Seed", p.seed, 1, 9999, function(v) p.seed = math.floor(v) end)
-  ui.combo("Color", { "Monochrome", "Tinted" }, p.colorize, function(v)
-    p.colorize = v
+  -- ui.combo's `current` is 1-based and on_change receives 1-based: the
+  -- stored param is 0/1, so translate both ways (was off-by-one — selecting
+  -- "Tinted" stored 2, which the kernel treats as monochrome).
+  ui.combo("Color", { "Monochrome", "Tinted" }, p.colorize + 1, function(v)
+    p.colorize = v - 1
   end)
   if p.colorize == 1 then
     ui.color("Tint", p.tint, function(v) p.tint = v end)
