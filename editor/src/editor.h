@@ -38,6 +38,7 @@ void gfx_free_tex(intptr_t id);
 // kernels.cpp — pure pixel ops. All take/return Image* (fresh), read Lua
 // args, push results. Deterministic for a given seed.
 Image* k_resize(const Image* src, int w, int h, const char* filter);
+Image* k_crop(const Image* src, int x, int y, int w, int h);
 Image* k_blur(const Image* src, float radius, const char* type);
 Image* k_grade(const Image* src, float brightness, float contrast, float gamma,
                float saturation, float vibrance, float hue, float temperature,
@@ -91,6 +92,7 @@ char* file_read_all(const char* path, size_t* len);          // malloc'd
 int file_mkdirs(const char* path);                           // recursive
 int file_copy(const char* src, const char* dst);
 int file_exists(const char* path);
+int file_is_dir(const char* path);
 // path helpers (static buffers, not thread safe)
 const char* path_dirname(const char* p);
 const char* path_join(const char* a, const char* b);

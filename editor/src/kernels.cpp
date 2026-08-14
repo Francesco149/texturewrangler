@@ -210,6 +210,26 @@ Image* k_resize(const Image* src, int w, int h, const char* filter) {
   return out;
 }
 
+// ── crop ────────────────────────────────────────────────────────────────────
+
+Image* k_crop(const Image* src, int x, int y, int w, int h) {
+  if (!src || w <= 0 || h <= 0) return nullptr;
+  if (x < 0) x = 0;
+  if (y < 0) y = 0;
+  if (x >= src->w) x = src->w - 1;
+  if (y >= src->h) y = src->h - 1;
+  if (w > src->w - x) w = src->w - x;
+  if (h > src->h - y) h = src->h - y;
+  if (w <= 0 || h <= 0) return nullptr;
+  Image* out = tex_alloc(w, h);
+  if (!out) return nullptr;
+  for (int yy = 0; yy < h; yy++) {
+    memcpy(out->px + (size_t)yy * w,
+           src->px + (size_t)(y + yy) * src->w + x, sizeof(uint32_t) * (size_t)w);
+  }
+  return out;
+}
+
 // ── blur (separable) ────────────────────────────────────────────────────────
 
 Image* k_blur(const Image* src, float radius, const char* type) {
@@ -1110,6 +1130,17 @@ static int l_k_resize(lua_State* L) {
   return 1;
 }
 
+// tw.tex.crop(img, x, y, w, h) -> img  (region, clamped to the source)
+static int l_k_crop(lua_State* L) {
+  Image* img = lua_check_image(L, 1);
+  int x = (int)luaL_checkinteger(L, 2);
+  int y = (int)luaL_checkinteger(L, 3);
+  int w = (int)luaL_checkinteger(L, 4);
+  int h = (int)luaL_checkinteger(L, 5);
+  lua_push_image(L, k_crop(img, x, y, w, h));
+  return 1;
+}
+
 static int l_k_blur(lua_State* L) {
   Image* img = lua_check_image(L, 1);
   float r = (float)luaL_checknumber(L, 2);
@@ -1297,6 +1328,8 @@ void kernels_register(lua_State* L) {
   lua_getfield(L, -1, "tex");
   lua_pushcfunction(L, l_k_resize);
   lua_setfield(L, -2, "resize");
+  lua_pushcfunction(L, l_k_crop);
+  lua_setfield(L, -2, "crop");
   lua_pushcfunction(L, l_k_blur);
   lua_setfield(L, -2, "blur");
   lua_pushcfunction(L, l_k_grade);

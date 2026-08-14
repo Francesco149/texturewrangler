@@ -23,7 +23,7 @@ local function add_menu()
   if ig.button("+ Add") then ig.open_popup("##add_layer") end
   if ig.begin_popup("##add_layer") then
     local types = { "image", "paint", "noise", "grade", "palette",
-                    "downscale", "seamless", "fill", "group", "export" }
+                    "downscale", "crop", "seamless", "fill", "group", "export" }
     for _, t in ipairs(types) do
       if ig.menu_item(doc.type_names[t]) then
         local l = new_layer_of(t)
@@ -84,6 +84,15 @@ local function row(l, depth, in_flight)
   local x0, y0 = ig.get_cursor_screen_pos()
   local avail_w = ig.get_content_region_avail()
   local selected = panels.selected() == l.id
+  panels._row_y0s = panels._row_y0s or {}
+  panels._row_y0s[l.id] = y0
+
+  -- the row being dragged: amber tint so it reads as "moving"
+  if doc._drag and doc._drag.id == l.id then
+    local dlh = ig.get_window_draw_list()
+    ig.dl_add_rect_filled(dlh, x0, y0, x0 + avail_w, y0 + ROW_H,
+                          0.92, 0.62, 0.35, 0.16)
+  end
 
   -- The body is pcall'd so push_id ALWAYS balances even when it throws:
   -- an unbalanced ID stack corrupts imgui's state and asserts next frame.
@@ -168,27 +177,41 @@ local function row(l, depth, in_flight)
     ig.end_popup()
   end
 
-  -- drag to reorder (within the same parent list)
-  if not doc._drag and ig.is_item_hovered() and ig.is_mouse_dragging(0) and
-     not in_flight then
+  -- drag to reorder (within the same parent list). LIVE: as the cursor
+  -- crosses a neighbour row's midpoint the layer swaps with it, so the
+  -- row visibly moves with the cursor. The old code computed a fixed
+  -- delta on mouse release — direction-inverted (screen-up is a higher
+  -- stack index since the list renders top-first) and using a wrong
+  -- pitch, so dragging down did nothing and dragging up moved down.
+  if not doc._drag and (ig.is_item_hovered() or handle_hover) and
+     ig.is_mouse_dragging(0) and not in_flight then
     doc._drag = { id = l.id, y0 = y0 }
   end
-  if doc._drag and doc._drag.id == l.id and not ig.is_mouse_down(0) then
-    local _, my = ig.get_mouse_pos()
-    local delta = math.floor((my - doc._drag.y0) / (ROW_H + 4))
-    if delta ~= 0 then
+  if doc._drag and doc._drag.id == l.id then
+    if ig.is_mouse_down(0) then
+      doc._coalescing = true -- one undo entry for the whole drag
       local parent = doc.find_parent(l.id)
       local list = parent and parent.children or doc.layers
       local idx = nil
       for i, x in ipairs(list) do if x.id == l.id then idx = i break end end
       if idx then
-        local ni = math.max(1, math.min(#list, idx + delta))
-        if ni ~= idx then
-          doc.mutate(function() doc.move_layer(l.id, ni) end, "Reorder")
+        local _, my = ig.get_mouse_pos()
+        -- target = the same-list row whose midpoint the cursor is nearest
+        local best, bestd = nil, 1e9
+        for i, x in ipairs(list) do
+          local yy = panels._row_y0s[x.id]
+          if yy then
+            local d = math.abs(yy + ROW_H / 2 - my)
+            if d < bestd then best, bestd = i, d end
+          end
+        end
+        if best and best ~= idx then
+          doc.coalesce_mutate(function() doc.move_layer(l.id, best) end)
         end
       end
+    else
+      doc._drag = nil
     end
-    doc._drag = nil
   end
 
   end)

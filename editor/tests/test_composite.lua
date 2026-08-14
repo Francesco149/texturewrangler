@@ -239,6 +239,74 @@ function M.test_seamless_layer()
   t.true_(math.abs(lv - rv) <= 17, "boundary step reduced, " .. lv .. " vs " .. rv)
 end
 
+-- ── crop layer ──────────────────────────────────────────────────────────────
+
+function M.test_crop_layer_region()
+  fresh()
+  add_fill({ r = 255, g = 0, b = 0, a = 255 })
+  local c = doc.new_layer("crop")
+  c.params.w = 8
+  c.params.h = 8
+  doc.add_layer(c)
+  local img = render.composite(nil, { 16, 16 }, doc._cache)
+  local w, h = tex.size(img)
+  t.eq(w, 8, "crop width 8")
+  t.eq(h, 8, "crop height 8")
+  t.all_pixels(img, 255, 0, 0, 255, "cropped region keeps color")
+end
+
+function M.test_crop_layer_offset()
+  fresh()
+  local g = tex.new(16, 16, { r = 0, g = 0, b = 0, a = 255 })
+  for x = 0, 15 do
+    local v = math.floor(x / 15 * 255)
+    for y = 0, 15 do tex.set(g, x, y, v, v, v, 255) end
+  end
+  local l = doc.new_layer("image")
+  doc._asset_cache["g"] = g
+  doc.assets["g"] = { file = "g.png", w = 16, h = 16 }
+  l.params.asset = "g"
+  doc.add_layer(l)
+  local c = doc.new_layer("crop")
+  c.params.x = 8
+  c.params.w = 8
+  c.params.h = 16
+  doc.add_layer(c)
+  local img = render.composite(nil, { 16, 16 }, doc._cache)
+  local w, h = tex.size(img)
+  t.eq(w, 8, "offset crop width")
+  t.eq(h, 16, "offset crop height")
+  -- the crop starts at source x=8 → v = floor(8/15*255) = 136
+  local r = select(1, tex.get(img, 0, 0))
+  t.near(r, 136, 2, "right half of gradient cropped, r=" .. r)
+end
+
+function M.test_crop_default_noop()
+  fresh()
+  add_fill({ r = 10, g = 20, b = 30, a = 255 })
+  local c = doc.new_layer("crop") -- w/h = 0 means full source
+  doc.add_layer(c)
+  local img = render.composite(nil, { 16, 16 }, doc._cache)
+  local w, h = tex.size(img)
+  t.eq(w, 16, "default crop keeps width")
+  t.eq(h, 16, "default crop keeps height")
+  t.all_pixels(img, 10, 20, 30, 255, "full crop is a no-op")
+end
+
+function M.test_crop_first_layer_below_nil()
+  fresh()
+  local c = doc.new_layer("crop")
+  c.params.w = 4
+  c.params.h = 4
+  doc.add_layer(c)
+  local img = render.composite(nil, { 16, 16 }, doc._cache)
+  t.true_(img ~= nil, "crop first layer renders")
+  local w, h = tex.size(img)
+  t.eq(w, 4, "crop of transparent at 4x4")
+  t.eq(h, 4, "crop of transparent at 4x4")
+  t.all_pixels(img, 0, 0, 0, 0, "transparent stays transparent")
+end
+
 -- ── edge cases: effects with nothing below them ─────────────────────────────
 
 function M.test_grade_first_layer_below_nil()

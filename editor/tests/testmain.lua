@@ -13,7 +13,7 @@ panels = require("panels")
 perf = require("perf")
 
 for _, t in ipairs({ "image", "paint", "noise", "grade", "palette",
-                     "downscale", "seamless", "fill", "group", "export" }) do
+                     "downscale", "crop", "seamless", "fill", "group", "export" }) do
   render.register(t, require("layers." .. t))
 end
 

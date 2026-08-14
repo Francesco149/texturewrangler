@@ -24,7 +24,7 @@ palette_panel = require("panel_palette")
 export_panel = require("panel_export")
 
 for _, t in ipairs({ "image", "paint", "noise", "grade", "palette",
-                     "downscale", "seamless", "fill", "group", "export" }) do
+                     "downscale", "crop", "seamless", "fill", "group", "export" }) do
   render.register(t, require("layers." .. t))
 end
 
@@ -138,6 +138,25 @@ local function begin_main(w, h)
   ig.begin("##main", MAIN_FLAGS)
 end
 
+-- the Project toolbar button: a small popup with project actions
+local function project_popup_frame()
+  if not panels.state.project_popup then return end
+  ig.open_popup("##project")
+  if ig.begin_popup("##project") then
+    ig.text(doc.name)
+    ig.text_colored(doc.path or "(unsaved)", 0.45, 0.47, 0.52, 1)
+    ig.separator()
+    if ig.menu_item("Export all") then export.all() end
+    if doc.path and ig.menu_item("Open folder") then
+      tw.app.open_folder(doc.path)
+    end
+    if ig.menu_item("Save now") then doc.save() end
+    ig.end_popup()
+  else
+    panels.state.project_popup = false
+  end
+end
+
 local function editor_frame()
   panels.tick_splitters()
   local r = panels.rects()
@@ -162,10 +181,13 @@ panel("##exports", export_r, "Export", function()
   end)
 panel("##console", r.bottom, "Console", function()
     console.frame()
-  end)
+  end, { collapsible = true })
 panel("##preview", r.center, "Preview", function()
     preview.frame(r.center)
   end)
+  panels.draw_splitter_highlight()
+  project_popup_frame()
+  import.browser_frame()
   ig.end_()
 
   import.handle_shortcuts()

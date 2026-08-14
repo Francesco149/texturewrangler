@@ -9,6 +9,31 @@ local function solid(w, h, r, g, b, a)
   return tex.new(w, h, { r = r, g = g, b = b, a = a or 255 })
 end
 
+-- ── crop ───────────────────────────────────────────────────────────────────
+
+function M.test_crop_kernel_region()
+  local img = tex.new(4, 2, { r = 0, g = 0, b = 0, a = 255 })
+  tex.set(img, 1, 0, 255, 0, 0, 255)
+  tex.set(img, 2, 1, 0, 255, 0, 255)
+  local out = tex.crop(img, 1, 0, 2, 2)
+  local w, h = tex.size(out)
+  t.eq(w, 2, "crop width")
+  t.eq(h, 2, "crop height")
+  t.pixel_eq(out, 0, 0, 255, 0, 0, 255, "cropped red kept")
+  t.pixel_eq(out, 1, 1, 0, 255, 0, 255, "cropped green kept")
+  t.pixel_eq(out, 1, 0, 0, 0, 0, 255, "outside original stays transparent")
+end
+
+function M.test_crop_kernel_clamp()
+  -- x/y/w/h out of range clamp to the source bounds, never OOB
+  local img = solid(2, 2, 7, 8, 9, 255)
+  local out = tex.crop(img, 10, 10, 100, 100)
+  local w, h = tex.size(out)
+  t.eq(w, 1, "clamped crop width 1")
+  t.eq(h, 1, "clamped crop height 1")
+  t.pixel_eq(out, 0, 0, 7, 8, 9, 255, "clamped to last pixel")
+end
+
 -- ── resize ─────────────────────────────────────────────────────────────────
 
 function M.test_resize_nearest_down()
