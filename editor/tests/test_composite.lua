@@ -130,14 +130,15 @@ function M.test_group_include_below()
   c.params.type = "solid"
   c.params.c0 = { r = 0, g = 255, b = 0, a = 128 }
   doc.add_layer(c, g.id)
-  -- layer-only output: children composite FROM the red below → red+green
-  local only = render.layer_only(g.id, { 16, 16 })
-  local r, g2 = tex.get(only, 0, 0)
-  t.true_(r > 100 and g2 > 100, "include-below group output mixes red+green, r=" .. r)
-  -- and it REPLACES the composite (no double-blend)
+  -- composite AT the group: children composite FROM the red below
+  local at = render.composite(doc.stack_index(g.id), { 16, 16 }, doc._cache)
+  local r, g2 = tex.get(at, 0, 0)
+  t.true_(r > 100 and g2 > 100, "include-below mixes red+green, r=" .. r)
+  -- and it REPLACES the composite (no double-blend): full composite = same
   local img = render.composite(nil, { 16, 16 }, doc._cache)
   local r3, g3 = tex.get(img, 0, 0)
-  t.true_(r3 > 100 and g3 > 100, "composite shows the baked group, r=" .. r3)
+  t.true_(math.abs(r3 - r) < 2 and math.abs(g3 - g2) < 2,
+          "full composite = baked group, r=" .. r3)
 end
 
 function M.test_group_semitransparent_over_stack()
@@ -230,9 +231,12 @@ function M.test_seamless_layer()
   local s = doc.new_layer("seamless")
   doc.add_layer(s)
   local img = render.composite(nil, { 16, 16 }, doc._cache)
+  -- edges pull from the middle (mask=1); boundary step = source step
+  t.pixel_eq(img, 0, 0, 136, 136, 136, 255, "left edge = src(8)")
+  t.pixel_eq(img, 15, 0, 119, 119, 119, 255, "right edge = src(7)")
   local lv = select(1, tex.get(img, 0, 0))
   local rv = select(1, tex.get(img, 15, 0))
-  t.true_(math.abs(lv - rv) <= 2, "seamless edge continuity, " .. lv .. " vs " .. rv)
+  t.true_(math.abs(lv - rv) <= 17, "boundary step reduced, " .. lv .. " vs " .. rv)
 end
 
 return M

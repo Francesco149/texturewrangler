@@ -150,11 +150,12 @@ end
 
 function M.test_map_palette_recolor()
   local img = tex.new(2, 1, { r = 255, g = 0, b = 0, a = 255 })
-  tex.set(img, 1, 0, 0, 0, 255, 255)
-  local pal = { { r = 0, g = 255, b = 0, a = 255 }, { r = 0, g = 0, b = 0, a = 255 } }
+  tex.set(img, 1, 0, 0, 255, 0, 255)
+  -- pal {green, magenta}: red → magenta (65025 < 130050), green → green
+  local pal = { { r = 0, g = 255, b = 0, a = 255 }, { r = 255, g = 0, b = 255, a = 255 } }
   local out = tex.map_palette(img, pal, "none", 0)
-  t.pixel_eq(out, 0, 0, 0, 255, 0, 255, "red → palette[0]")
-  t.pixel_eq(out, 1, 0, 0, 0, 0, 255, "blue → palette[1]")
+  t.pixel_eq(out, 0, 0, 255, 0, 255, 255, "red → palette[1] (magenta)")
+  t.pixel_eq(out, 1, 0, 0, 255, 0, 255, "green → palette[0] (green)")
 end
 
 function M.test_dither_deterministic()
@@ -290,18 +291,25 @@ function M.test_seamless_constant()
 end
 
 function M.test_seamless_reduces_seam()
-  -- horizontal gradient black→white is NOT seamless; after offset the
-  -- left and right edges both blend toward the middle (≈128)
+  -- horizontal gradient black→white with a HARD seam (0→255) at the wrap.
+  -- Offset-crossfade moves the boundary samples to the middle of the
+  -- source: out(0) = src(w/2), out(w-1) = src(w/2-1) — the boundary step
+  -- shrinks from 255 to the source's per-texel step (17).
   local img = tex.new(16, 16, { r = 0, g = 0, b = 0, a = 255 })
   for x = 0, 15 do
     local v = math.floor(x / 15 * 255)
     for y = 0, 15 do tex.set(img, x, y, v, v, v, 255) end
   end
   local out = tex.seamless(img, 4, "offset")
+  -- mask=1 at the edges: out pulls exactly from the shifted source
+  t.pixel_eq(out, 0, 0, 136, 136, 136, 255, "left edge = src(8)")
+  t.pixel_eq(out, 15, 0, 119, 119, 119, 255, "right edge = src(7)")
+  -- mask=0 in the middle (both axes): interior untouched
+  t.pixel_eq(out, 7, 7, 119, 119, 119, 255, "interior = src(7)")
+  -- boundary step (17) is far smaller than the original seam (255)
   local l = select(1, tex.get(out, 0, 0))
   local r = select(1, tex.get(out, 15, 0))
-  t.true_(math.abs(l - r) <= 2, "edges converge, l=" .. l .. " r=" .. r)
-  t.true_(l > 100 and l < 160, "edge blends toward middle, l=" .. l)
+  t.true_(math.abs(l - r) <= 17, "boundary step ≤ source step, got " .. math.abs(l - r))
 end
 
 -- ── fill ───────────────────────────────────────────────────────────────────
@@ -363,4 +371,19 @@ function M.test_stats()
   t.eq(s.max_r, 255, "max r")
 end
 
+
+  local c = doc.new_layer("fill", "green")
+  c.params.type = "solid"
+  c.params.c0 = { r = 0, g = 255, b = 0, a = 128 }
+  doc.add_layer(c, g.id)
+  local idx = doc.stack_index(g.id)
+  io.write("PROBE group idx=" .. tostring(idx) .. "\n")
+  local at = render.composite(idx, { 16, 16 }, doc._cache)
+  if at then
+    io.write("PROBE at(0,0)=" .. select(1, tex.get(at, 0, 0)) .. "," ..
+             select(2, tex.get(at, 0, 0)) .. "\n")
+  else
+    io.write("PROBE at=nil\n")
+  end
+end
 return M

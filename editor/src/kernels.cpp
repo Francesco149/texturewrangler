@@ -749,12 +749,14 @@ Image* k_blend(const Image* base, const Image* src, const char* mode,
       out->px[i] = 0;
       continue;
     }
-    float cb[3] = {br, bg, bb}, cs[3] = {sr, sg, sb};
-    if (strcmp(mode, "normal") != 0) blend_fn(mode, cb, cs);
+    float cb_orig[3] = {br, bg, bb}, cs[3] = {sr, sg, sb};
+    float cb[3] = {br, bg, bb};
+    blend_fn(mode, cb, cs); // cb = B(Cb,Cs); normal → Cs
     float co[3];
     for (int k = 0; k < 3; k++) {
-      co[k] = (sa * (1 - ba) * cs[k] + ba * (1 - sa) * cb[k] + sa * ba * cb[k]) /
-              ao;
+      // co = αs(1-αb)Cs + αb(1-αs)Cb + αsαb·B(Cb,Cs);  (Cb = ORIGINAL backdrop)
+      co[k] = (sa * (1 - ba) * cs[k] + ba * (1 - sa) * cb_orig[k] +
+               sa * ba * cb[k]) / ao;
       if (co[k] < 0) co[k] = 0;
       if (co[k] > 1) co[k] = 1;
     }
@@ -924,7 +926,7 @@ Image* k_fill(int w, int h, const char* type, uint32_t c0, uint32_t c1,
     for (int x = 0; x < w; x++) {
       float t = 0;
       if (solid) {
-        t = 1;
+        t = 0; // solid → c0
       } else if (linear) {
         float dx = x - cx, dy = y - cy;
         t = (dx * ca + dy * sa) / (rx > 0 ? rx : 1);

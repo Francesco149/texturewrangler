@@ -114,12 +114,13 @@ function doc.stack_index(id)
 end
 
 function doc.add_layer(layer, parent_id, at_top)
+  -- default: insert at the TOP of the stack (layers[1] = bottom)
   local parent = parent_id and doc.get_layer(parent_id) or nil
   local list = parent and parent.children or doc.layers
-  if at_top then
-    table.insert(list, #list + 1, layer)
-  else
+  if at_top == false then
     table.insert(list, 1, layer)
+  else
+    table.insert(list, #list + 1, layer)
   end
   doc._parent[layer.id] = parent_id or nil
   if layer.children then
