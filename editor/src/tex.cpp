@@ -184,7 +184,12 @@ static int l_gfx_register(lua_State* L) {
     lua_pushnil(L);
     return 1;
   }
-  SDL_Texture* t = SDL_CreateTexture(g_renderer, SDL_PIXELFORMAT_RGBA32,
+  // tw.Image pixels are packed 0xRRGGBBAA (R in the MSB). The SDL format
+  // whose pixel layout matches is RGBA8888 (pixel 0xRRGGBBAA; little-endian
+  // memory bytes [A,B,G,R]). NOT RGBA32/ABGR8888 — on little-endian those
+  // are the SAME constant (0x16762004, memory [R,G,B,A]) and would swap
+  // R↔A and G↔B (the red-tint + translucency bug).
+  SDL_Texture* t = SDL_CreateTexture(g_renderer, SDL_PIXELFORMAT_RGBA8888,
                                      SDL_TEXTUREACCESS_STATIC, img->w, img->h);
   if (!t) {
     lua_pushnil(L);
@@ -213,7 +218,7 @@ static int l_gfx_update(lua_State* L) {
   int w = (int)fw, h = (int)fh;
   if (w != img->w || h != img->h) {
     SDL_DestroyTexture(t);
-    t = SDL_CreateTexture(g_renderer, SDL_PIXELFORMAT_RGBA32,
+    t = SDL_CreateTexture(g_renderer, SDL_PIXELFORMAT_RGBA8888,
                           SDL_TEXTUREACCESS_STATIC, img->w, img->h);
     SDL_SetTextureScaleMode(t, SDL_SCALEMODE_NEAREST);
     // fix registry entry id

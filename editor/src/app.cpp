@@ -87,15 +87,23 @@ int app_screenshot(const char* path) {
     app_log("screenshot readback failed: %s", SDL_GetError());
     return -1;
   }
-  int w = surf->w, h = surf->h;
-  Image* img = tex_alloc(w, h);
-  if (!img) {
-    SDL_DestroySurface(surf);
+  // Readback format is renderer-dependent; normalize to RGBA32 so the byte
+  // copy below (b[0..3] = R,G,B,A) is always correct. SDL3 signature:
+  // SDL_ConvertSurface(surface, format) — no flags arg (SDL2 had one).
+  SDL_Surface* conv = SDL_ConvertSurface(surf, SDL_PIXELFORMAT_RGBA32);
+  SDL_DestroySurface(surf);
+  if (!conv) {
+    app_log("screenshot format convert failed: %s", SDL_GetError());
     return -1;
   }
-  // surface format is typically RGBA32; convert per-pixel byte order
+  int w = conv->w, h = conv->h;
+  Image* img = tex_alloc(w, h);
+  if (!img) {
+    SDL_DestroySurface(conv);
+    return -1;
+  }
   for (int y = 0; y < h; y++) {
-    const uint8_t* row = (const uint8_t*)surf->pixels + (size_t)y * surf->pitch;
+    const uint8_t* row = (const uint8_t*)conv->pixels + (size_t)y * conv->pitch;
     for (int x = 0; x < w; x++) {
       const uint8_t* b = row + (size_t)x * 4;
       img->px[(size_t)y * w + x] =
@@ -103,7 +111,7 @@ int app_screenshot(const char* path) {
           ((uint32_t)b[2] << 8) | (uint32_t)b[3];
     }
   }
-  SDL_DestroySurface(surf);
+  SDL_DestroySurface(conv);
   int rc = file_save_image(path, img);
   tex_free(img);
   return rc;
@@ -266,6 +274,15 @@ int app_main(int argc, char** argv) {
   if (!g_renderer) {
     app_log("SDL_CreateRenderer failed: %s", SDL_GetError());
     return 1;
+  }
+  // vsync caps the interactive frame rate at the display refresh (was
+  // running at ~3000 fps). SDL3 has no CreateRenderer flags — it's a
+  // separate call. TW_SHOT is set before SDL init in main.cpp; offscreen
+  // drivers have no refresh to sync to, so skip it there.
+  if (!getenv("TW_SHOT")) {
+    if (!SDL_SetRenderVSync(g_renderer, 1)) {
+      app_log("SDL_SetRenderVSync failed: %s", SDL_GetError());
+    }
   }
   app_set_renderer(g_renderer);
 
