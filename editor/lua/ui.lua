@@ -16,7 +16,7 @@ function ui.new(ctx)
 
   function u.label(label, value) ig.label_text(label, value) end
   function u.text(s) ig.text(s) end
-  function u.text_colored(s, r, g, b, a) ig.text_colored(r, g, b, a, s) end
+  function u.text_colored(s, r, g, b, a) ig.text_colored(s, r, g, b, a) end
   function u.same_line() ig.same_line() end
   function u.new_line() ig.new_line() end
   function u.separator() ig.separator() end

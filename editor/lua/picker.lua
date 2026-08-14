@@ -28,6 +28,18 @@ function picker.frame(rect)
   ig.set_next_window_pos(0, 0)
   ig.set_next_window_size(w, h)
   ig.begin_child("##picker", w, h, 0, 0)
+  local ok, perr = pcall(function()
+    picker.body()
+  end)
+  if not ok then
+    tw.log_error("picker: " .. tostring(perr))
+  end
+  ig.end_child()
+end
+
+function picker.body()
+  local io = ig.get_io()
+  local w, h = io.display_w, io.display_h
   local dl = ig.get_window_draw_list()
   ig.dl_add_rect_filled(dl, 0, 0, w, h, 0.082, 0.086, 0.10, 1)
 
@@ -100,8 +112,8 @@ function picker.frame(rect)
                             0.05, 0.052, 0.06, 1, 4)
     end
     -- name
-    ig.dl_add_text(dl, cx + 10, cy + 130, p.name, 0.82, 0.83, 0.86, 1)
-    ig.dl_add_text(dl, cx + 10, cy + 150, "open / delete", 0.4, 0.42, 0.47, 1)
+    ig.dl_add_text(dl, cx + 10, cy + 130, 0.82, 0.83, 0.86, 1, p.name)
+    ig.dl_add_text(dl, cx + 10, cy + 150, 0.4, 0.42, 0.47, 1, "open / delete")
   end
 
   -- context menu on a project card
@@ -171,8 +183,6 @@ function picker.frame(rect)
       ig.end_popup()
     end
   end
-
-  ig.end_child()
 end
 
 picker.thumbs = {}

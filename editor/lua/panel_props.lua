@@ -34,7 +34,6 @@ function panel.frame()
   local l = sel and doc.get_layer(sel)
   if not l then
     ig.text_colored("Select a layer to edit its properties.", 0.45, 0.47, 0.52, 1)
-    ig.end_child()
     return
   end
 

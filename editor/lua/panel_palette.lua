@@ -29,7 +29,6 @@ function panel.frame()
   if not pal or #pal == 0 then
     ig.text_colored("No palette — add a Palette layer and set its colors.",
                     0.45, 0.47, 0.52, 1)
-    ig.end_child()
     return
   end
 

@@ -27,12 +27,15 @@ function panels.rects()
   local rw = panels.layout.right_w
   local bh = panels.layout.bottom_h
   local top = TOP_H
+  local R = function(x, y, w2, h2)
+    return { x = x, y = y, w = w2, h = h2 }
+  end
   return {
-    top = { 0, 0, w, top },
-    left = { 0, top, lw, h - top - bh },
-    right = { w - rw, top, rw, h - top - bh },
-    bottom = { 0, h - bh, w, bh },
-    center = { lw, top, w - lw - rw, h - top - bh },
+    top = R(0, 0, w, top),
+    left = R(0, top, lw, h - top - bh),
+    right = R(w - rw, top, rw, h - top - bh),
+    bottom = R(0, h - bh, w, bh),
+    center = R(lw, top, w - lw - rw, h - top - bh),
   }
 end
 
@@ -68,6 +71,12 @@ end
 -- begin: position a child at rect, draw a header (bg + title + optional
 -- right-aligned action callback), return the body child open flag.
 
+-- small helper: draw a filled rect on a draw list
+local function dl_add_rect_filled(dl, x0, y0, x1, y1, r, g, b, a)
+  ig.dl_add_rect_filled(dl, x0, y0, x1, y1, r, g, b, a)
+end
+panels.dl_rect = dl_add_rect_filled
+
 function panels.begin(id, rect, title, opts)
   opts = opts or {}
   ig.set_next_window_pos(rect.x, rect.y)
@@ -97,11 +106,6 @@ function panels.end_()
   ig.end_child()
 end
 
--- small helper: draw a filled rect on a draw list
-local function dl_add_rect_filled(dl, x0, y0, x1, y1, r, g, b, a)
-  ig.dl_add_rect_filled(dl, x0, y0, x1, y1, r, g, b, a)
-end
-panels.dl_rect = dl_add_rect_filled
 
 -- ── top toolbar ─────────────────────────────────────────────────────────────
 

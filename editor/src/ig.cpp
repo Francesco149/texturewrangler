@@ -123,8 +123,10 @@ static int l_text(lua_State* L) {
   return 0;
 }
 static int l_text_colored(lua_State* L) {
-  ImVec4 c = check_v4(L, 1);
-  ImGui::TextColored(c, "%s", luaL_checkstring(L, 5));
+  const char* s = luaL_checkstring(L, 1);
+  ImVec4 c((float)luaL_checknumber(L, 2), (float)luaL_checknumber(L, 3),
+           (float)luaL_checknumber(L, 4), (float)luaL_checknumber(L, 5));
+  ImGui::TextColored(c, "%s", s);
   return 0;
 }
 static int l_label_text(lua_State* L) {
@@ -538,10 +540,29 @@ static int l_pop_style_color(lua_State* L) {
 }
 static int l_push_style_var(lua_State* L) {
   ImGuiStyleVar v = (ImGuiStyleVar)luaL_checkinteger(L, 1);
-  if (lua_isnumber(L, 2)) {
-    ImGui::PushStyleVar(v, (float)lua_tonumber(L, 2));
-  } else {
+  // imgui asserts if the wrong PushStyleVar variant is used for a var
+  auto is_v2 = [](ImGuiStyleVar x) {
+    switch (x) {
+      case ImGuiStyleVar_WindowPadding:
+      case ImGuiStyleVar_WindowMinSize:
+      case ImGuiStyleVar_WindowTitleAlign:
+      case ImGuiStyleVar_FramePadding:
+      case ImGuiStyleVar_ItemSpacing:
+      case ImGuiStyleVar_ItemInnerSpacing:
+      case ImGuiStyleVar_CellPadding:
+      case ImGuiStyleVar_ButtonTextAlign:
+      case ImGuiStyleVar_SelectableTextAlign:
+      case ImGuiStyleVar_SeparatorTextAlign:
+      case ImGuiStyleVar_SeparatorTextPadding:
+        return true;
+      default:
+        return false;
+    }
+  };
+  if (is_v2(v)) {
     ImGui::PushStyleVar(v, check_v2(L, 2));
+  } else {
+    ImGui::PushStyleVar(v, (float)luaL_checknumber(L, 2));
   }
   return 0;
 }
@@ -746,7 +767,8 @@ void ig_register(lua_State* L) {
   lua_getglobal(L, "tw");
   lua_newtable(L);
   REG(begin);
-  REG(end);
+  lua_pushcfunction(L, l_end);
+  lua_setfield(L, -2, "end_");
   REG(begin_child);
   REG(end_child);
   REG(same_line);

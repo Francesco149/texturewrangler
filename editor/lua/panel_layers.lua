@@ -120,12 +120,12 @@ local function row(l, depth, in_flight)
                           selected and 0.38 or 0.22, 1)
   end
 
-  -- type badge on the right
+  -- type badge on the right (drawlist text at SCREEN coords — avoids
+  -- SetCursorPos extending the child bounds)
+  local dl2 = ig.get_window_draw_list()
   local badge = doc.type_names[l.type]
   local tw_ = ig.calc_text_size(badge)
-  ig.set_cursor_pos(x0 + w - tw_ - 30, y0 + 6)
-  ig.text_colored(badge, 0.45, 0.47, 0.52, 1)
-  ig.set_cursor_pos(x0 + 4, y0 + row_h)
+  ig.dl_add_text(dl2, x0 + w - tw_ - 34, y0 + 8, 0.45, 0.47, 0.52, 1, badge)
 
   -- context menu
   if ig.begin_popup_context_item() then

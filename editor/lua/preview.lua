@@ -101,6 +101,13 @@ function preview.frame(rect)
     preview.state.zoom = ({ "fit", "1", "2", "4" })[znew + 1]
     preview.state.zoom_val = ({ 0, 1, 2, 4 })[znew + 1]
   end
+  -- right-aligned info on the header row
+  local info = string.format("%d×%d  ·  %s", w, h,
+                             ({ final = "final", at = "at layer", layer = "layer only" })[preview.state.mode])
+  local itw = ig.calc_text_size(info)
+  local avail = ig.get_content_region_avail()
+  ig.same_line(avail - itw - 8)
+  ig.text_colored(info, 0.45, 0.47, 0.52, 1)
 
   -- content area below the header
   local cw, ch = ig.get_content_region_avail()
@@ -191,12 +198,6 @@ function preview.frame(rect)
       doc.paint_end()
     end
   end
-
-  -- bottom-left info: resolution + mode
-  ig.set_cursor_pos(8, 0)
-  ig.text_colored(string.format("%d×%d  ·  %s", w, h,
-                                ({ final = "final", at = "at layer", layer = "layer only" })[preview.state.mode]),
-                  0.45, 0.47, 0.52, 1)
 end
 
 return preview
