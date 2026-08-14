@@ -85,7 +85,7 @@ function preview.frame(rect)
   -- header row
   ig.set_cursor_pos(0, 30)
   local modes = { "Final", "At layer", "Layer only" }
-  local mode_idx = { final = 1, at = 2, layer = 3 }[preview.state.mode]
+  local mode_idx = ({ final = 1, at = 2, layer = 3 })[preview.state.mode]
   local changed, mi = ig.combo("##mode", modes, mode_idx - 1)
   if changed then
     preview.state.mode = ({ "final", "at", "layer" })[mi + 1]
@@ -95,7 +95,7 @@ function preview.frame(rect)
   if tch then preview.state.tile = tv end
   ig.same_line()
   local zooms = { "Fit", "1×", "2×", "4×" }
-  local zi = { fit = 1, ["1"] = 2, ["2"] = 3, ["4"] = 4 }[preview.state.zoom] or 1
+  local zi = ({ fit = 1, ["1"] = 2, ["2"] = 3, ["4"] = 4 })[preview.state.zoom] or 1
   local zch, znew = ig.combo("##zoom", zooms, zi - 1)
   if zch then
     preview.state.zoom = ({ "fit", "1", "2", "4" })[znew + 1]

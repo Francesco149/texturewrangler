@@ -294,7 +294,8 @@ int app_main(int argc, char** argv) {
   ImGui_ImplSDL3_InitForSDLRenderer(g_window, g_renderer);
   ImGui_ImplSDLRenderer3_Init(g_renderer);
 
-  app_log("texturewrangler started (sdl %s)", SDL_GetVersion());
+  app_log("texturewrangler started (sdl %d.%d.%d)", SDL_MAJOR_VERSION,
+          SDL_MINOR_VERSION, SDL_MICRO_VERSION);
 
   int frame = 0;
   while (g_running) {

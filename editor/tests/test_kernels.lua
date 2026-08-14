@@ -320,12 +320,15 @@ function M.test_fill_solid()
 end
 
 function M.test_fill_linear_gradient()
+  -- gradient from left edge (t=0) across: center x=0, extent rx=2
   local out = tex.fill(4, 1, "linear", { r = 0, g = 0, b = 0, a = 255 },
-                       { r = 255, g = 255, b = 255, a = 255 }, 0, 2, 0.5, 2, 1)
+                       { r = 255, g = 255, b = 255, a = 255 }, 0, 0, 0.5, 2, 1)
   local r0 = select(1, tex.get(out, 0, 0))
-  local r1 = select(1, tex.get(out, 2, 0))
+  local r1 = select(1, tex.get(out, 1, 0))
+  local r2 = select(1, tex.get(out, 2, 0))
   local r3 = select(1, tex.get(out, 3, 0))
-  t.true_(r0 < r1 and r1 < r3, "linear ramp increases, " .. r0 .. " " .. r1 .. " " .. r3)
+  t.true_(r0 < r1 and r1 < r2, "linear ramp increases, " .. r0 .. " " .. r1 .. " " .. r2)
+  t.eq(r3, 255, "clamped at 1.0, got " .. r3)
 end
 
 -- ── stamp ──────────────────────────────────────────────────────────────────
@@ -372,18 +375,4 @@ function M.test_stats()
 end
 
 
-  local c = doc.new_layer("fill", "green")
-  c.params.type = "solid"
-  c.params.c0 = { r = 0, g = 255, b = 0, a = 128 }
-  doc.add_layer(c, g.id)
-  local idx = doc.stack_index(g.id)
-  io.write("PROBE group idx=" .. tostring(idx) .. "\n")
-  local at = render.composite(idx, { 16, 16 }, doc._cache)
-  if at then
-    io.write("PROBE at(0,0)=" .. select(1, tex.get(at, 0, 0)) .. "," ..
-             select(2, tex.get(at, 0, 0)) .. "\n")
-  else
-    io.write("PROBE at=nil\n")
-  end
-end
 return M
