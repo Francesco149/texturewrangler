@@ -372,6 +372,11 @@ end
 function doc.paint_begin(layer_id, w, h)
   local l = doc.get_layer(layer_id)
   if not l or l.type ~= "paint" then return false end
+  -- snapshot BEFORE the stroke lands: doc.mutate's push is a no-op here
+  -- because the stroke is added incrementally across begin/append, and
+  -- pushing at paint_end would capture the POST-stroke state, making the
+  -- first Ctrl+Z restore the doc to itself (undo appeared dead).
+  undo.push("Paint")
   doc._in_flight = layer_id
   local p = l.params
   local stroke = { points = {}, size = p.size, hardness = p.hardness,
@@ -397,7 +402,12 @@ function doc.paint_end()
   if not doc._in_flight then return end
   local l = doc.get_layer(doc._in_flight)
   doc._in_flight = nil
-  if l then doc.mutate(function() end, "Paint") end
+  if l then
+    -- the undo entry was already pushed at paint_begin; here we only need
+    -- the mutate tail (cache invalidation + dirty) so the stroke shows.
+    doc.bump_all()
+    doc.dirty = true
+  end
 end
 
 return doc

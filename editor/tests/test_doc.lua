@@ -49,6 +49,36 @@ function M.test_undo_redo()
   t.false_(undo.do_undo() == false and undo.do_redo() == false and false, "stack alive")
 end
 
+-- regression: the paint flow appends the stroke across begin/append/end,
+-- so the undo snapshot must be pushed at paint_begin (pre-stroke). Pushing
+-- at paint_end captured the post-stroke state and the first undo restored
+-- the doc to itself — undo of paint appeared dead.
+function M.test_paint_undo_one_step()
+  fresh_doc()
+  local p = doc.new_layer("paint")
+  doc.add_layer(p)
+  doc.paint_begin(p.id)
+  doc.paint_append(4, 4)
+  doc.paint_append(5, 5)
+  doc.paint_end()
+  t.eq(#p.params.strokes, 1, "one stroke painted")
+  t.true_(undo.do_undo(), "undo removes the stroke")
+  p = doc.get_layer(p.id) -- restore deep-copies layers; refetch
+  t.eq(#p.params.strokes, 0, "stroke gone after ONE undo")
+  t.true_(undo.do_redo(), "redo re-applies the stroke")
+  p = doc.get_layer(p.id)
+  t.eq(#p.params.strokes, 1, "stroke back after redo")
+  t.true_(undo.do_undo(), "undo again")
+  p = doc.get_layer(p.id)
+  t.eq(#p.params.strokes, 0, "stroke gone again")
+  -- new paint after undo clears the redo stack
+  doc.paint_begin(p.id)
+  doc.paint_append(6, 6)
+  doc.paint_end()
+  t.false_(undo.can_redo(), "new stroke clears redo")
+  t.eq(#p.params.strokes, 1, "only the new stroke remains")
+end
+
 function M.test_failed_mutate_rolls_back()
   fresh_doc()
   doc.mutate(function()
