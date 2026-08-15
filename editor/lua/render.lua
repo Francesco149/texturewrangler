@@ -46,13 +46,19 @@ local function composite_list(layers, limit_idx, size0, cache, force_from)
   for i, l in ipairs(layers) do
     if limit_idx and i > limit_idx then break end
     local token = (doc._ver[l.id] or 0) * 131 + size[1] * 7 + size[2]
+    -- the entry size MUST be the size AT this layer (before it processes):
+    -- storing the post-layer size made size-changing layers (downscale,
+    -- crop) miss the cache every frame — the composite and every thumbnail
+    -- re-rendered and re-registered GPU textures each frame, destroying
+    -- textures the draw list still referenced (freeze + crash).
+    local entry_size = { size[1], size[2] }
     if not l.visible then
       -- hidden: contributes nothing, and must NOT change the working size
       -- (a hidden downscale keeps the stack at its current size) or the
       -- composite below. Cache the unchanged entry so the chain stays
       -- consistent and unhiding re-renders on the next bump.
       if cache then
-        cache[l.id] = { token = token, img = img, size = { size[1], size[2] },
+        cache[l.id] = { token = token, img = img, size = entry_size,
                         out = nil }
       end
     else
@@ -90,7 +96,7 @@ local function composite_list(layers, limit_idx, size0, cache, force_from)
         end
         if newsize then size = newsize end
         if cache then
-          cache[l.id] = { token = token, img = img, size = { size[1], size[2] },
+          cache[l.id] = { token = token, img = img, size = entry_size,
                           out = out }
         end
       end

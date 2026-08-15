@@ -82,6 +82,31 @@ function M.test_downscale_removal_reverts_size()
   t.eq(w2, 16, "reverted to canvas")
 end
 
+-- regression: the cache entry for a size-changing layer (downscale/crop)
+-- stored the POST-layer size while the hit check compared the PRE-layer
+-- size, so the layer missed the cache every frame — the composite and
+-- every thumbnail re-rendered (and re-registered GPU textures) each frame.
+function M.test_downscale_cache_hits()
+  fresh()
+  add_fill({ r = 100, g = 100, b = 100, a = 255 })
+  local d = doc.new_layer("downscale")
+  d.params.size = { 8, 8 }
+  doc.add_layer(d)
+  local img1 = render.composite(nil, { 16, 16 }, doc._cache)
+  local img2 = render.composite(nil, { 16, 16 }, doc._cache)
+  local img3 = render.composite(nil, { 16, 16 }, doc._cache)
+  t.true_(img1 == img2, "composite is a cache hit (same userdata)")
+  t.true_(img2 == img3, "stable across calls")
+  -- thumbs too (the panel re-renders one per row per frame)
+  local t1 = render.thumb(2)
+  local t2 = render.thumb(2)
+  t.true_(t1 == t2, "thumbnail cache hits for a downscaled project")
+  -- a version bump still re-renders
+  doc.bump(d)
+  local img4 = render.composite(nil, { 16, 16 }, doc._cache)
+  t.true_(img4 ~= img3, "bump invalidates the cache")
+end
+
 function M.test_palette_layer_flow()
   fresh()
   add_fill({ r = 200, g = 30, b = 30, a = 255 })

@@ -15,12 +15,16 @@ function M.render(l, size, below, cache)
     local csize = { size[1], size[2] }
     for i, cl in ipairs(children) do
       local token = (doc._ver[cl.id] or 0) * 131 + csize[1] * 7 + csize[2]
+      -- entry size = the size AT this child (before it processes), so a
+      -- size-changing child (downscale/crop inside a group) can hit the
+      -- cache instead of re-rendering every frame (see render.composite_list)
+      local entry_size = { csize[1], csize[2] }
       local c = cache and cache[cl.id]
       if not cl.visible then
         -- hidden child: contributes nothing; keep the entry size and the
         -- accumulated composite (a hidden downscale must NOT resize).
         if cache then
-          cache[cl.id] = { token = token, img = img, size = { csize[1], csize[2] },
+          cache[cl.id] = { token = token, img = img, size = entry_size,
                            out = nil }
         end
       elseif c and c.token == token and c.size[1] == csize[1] and
@@ -51,7 +55,7 @@ function M.render(l, size, below, cache)
         end
         if newsize then csize = newsize end
         if cache then
-          cache[cl.id] = { token = token, img = img, size = { csize[1], csize[2] },
+          cache[cl.id] = { token = token, img = img, size = entry_size,
                            out = co }
         end
       end
