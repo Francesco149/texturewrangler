@@ -6,8 +6,10 @@
 local import = {}
 local ig = tw.ig
 
+-- stb is built without a webp decoder (see file.cpp STBI_ONLY_*), so webp
+-- would silently fail to load — keep the filter honest.
 local IMAGE_EXT = { png = true, jpg = true, jpeg = true, bmp = true, tga = true,
-                    gif = true, webp = true }
+                    gif = true }
 
 function import.is_image(path)
   local ext = path:match("%.([%w]+)$")
@@ -167,7 +169,13 @@ end
 
 function import.handle_shortcuts()
   local io = ig.get_io()
-  if io.key_ctrl and not io.want_capture_keyboard then
+  -- Gate on want_text_input, NOT want_capture_keyboard: with
+  -- NavEnableKeyboard enabled, imgui sets WantCaptureKeyboard as soon as
+  -- the mouse hovers any window (NavActive), which permanently blocked
+  -- every shortcut in the interactive app. want_text_input is true only
+  -- while an InputText is being typed in — exactly when shortcuts must
+  -- not fire.
+  if io.key_ctrl and not io.want_text_input then
     if ig.is_key_pressed(ig.key.U) then
       import.open_dialog()
     elseif ig.is_key_pressed(ig.key.V) then
@@ -178,6 +186,15 @@ function import.handle_shortcuts()
       if io.key_shift then undo.do_redo() else undo.do_undo() end
     elseif ig.is_key_pressed(ig.key.Y) then
       undo.do_redo()
+    end
+  end
+  -- Delete: remove the selected layer (suppressed while typing in a field)
+  if not io.want_text_input and ig.is_key_pressed(ig.key.Delete) then
+    local sel = panels.selected()
+    local l = sel and doc.get_layer(sel)
+    if l then
+      doc.mutate(function() doc.remove_layer(sel) end, "Delete layer")
+      panels.set_selected(nil)
     end
   end
 end

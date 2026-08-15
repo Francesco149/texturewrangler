@@ -81,6 +81,13 @@ end
 
 -- render one row; returns nil (or a drag result)
 local function row(l, depth, in_flight)
+  -- indent children under their group so membership reads at a glance;
+  -- root rows reset to the left edge. imgui items don't advance the
+  -- cursor x (only SameLine does), so each row must position itself —
+  -- and everything in the row (handle, thumb, name, badge) derives from
+  -- x0 = the shifted cursor.
+  local cx, cy = ig.get_cursor_pos()
+  ig.set_cursor_pos(depth > 0 and 14 * depth or 0, cy)
   local x0, y0 = ig.get_cursor_screen_pos()
   local avail_w = ig.get_content_region_avail()
   local selected = panels.selected() == l.id
@@ -135,6 +142,16 @@ local function row(l, depth, in_flight)
   ig.dummy(32, 28)
   ig.same_line()
 
+  -- group/child hints: an expanded (∨) marker on group rows, and a faint
+  -- vertical guide at the indent column for children.
+  if l.type == "group" then
+    local gy = y0 + row_h / 2
+    ig.dl_add_line(dlh, x0 + 78, gy - 3, x0 + 81, gy + 1, 0.62, 0.64, 0.7, 1, 1.5)
+    ig.dl_add_line(dlh, x0 + 81, gy + 1, x0 + 84, gy - 3, 0.62, 0.64, 0.7, 1, 1.5)
+  elseif depth > 0 then
+    ig.dl_add_line(dlh, x0 - 7, y0, x0 - 7, y0 + row_h, 0.30, 0.32, 0.38, 1, 1)
+  end
+
   -- name / type selectable (width shrunk so it still ends at the row edge)
   ig.set_next_item_width(w - 86)
   local hit = ig.selectable(l.name .. "##" .. l.id, selected, 0, w - 88, row_h - 6)
@@ -177,44 +194,17 @@ local function row(l, depth, in_flight)
     ig.end_popup()
   end
 
-  -- drag to reorder (within the same parent list). LIVE: as the cursor
-  -- crosses a neighbour row's midpoint the layer swaps with it, so the
-  -- row visibly moves with the cursor. The old code computed a fixed
-  -- delta on mouse release — direction-inverted (screen-up is a higher
-  -- stack index since the list renders top-first) and using a wrong
-  -- pitch, so dragging down did nothing and dragging up moved down.
+  -- drag to reorder (within the same parent list). START detection lives
+  -- here; the live TARGET computation runs in panel.frame() AFTER the row
+  -- pass, where every row's y0 is fresh for THIS frame (computing it here
+  -- read stale y0s for rows below the dragged one — they hadn't rendered
+  -- yet — which made the reorder ping-pong between two slots).
   if not doc._drag and (ig.is_item_hovered() or handle_hover) and
      ig.is_mouse_dragging(0) and not in_flight then
     doc._drag = { id = l.id, y0 = y0 }
   end
-  if doc._drag and doc._drag.id == l.id then
-    if ig.is_mouse_down(0) then
-      doc._coalescing = true -- one undo entry for the whole drag
-      local parent = doc.find_parent(l.id)
-      local list = parent and parent.children or doc.layers
-      local idx = nil
-      for i, x in ipairs(list) do if x.id == l.id then idx = i break end end
-      if idx then
-        local _, my = ig.get_mouse_pos()
-        -- target = the same-list row whose midpoint the cursor is nearest
-        local best, bestd = nil, 1e9
-        for i, x in ipairs(list) do
-          local yy = panels._row_y0s[x.id]
-          if yy then
-            local d = math.abs(yy + ROW_H / 2 - my)
-            if d < bestd then best, bestd = i, d end
-          end
-        end
-        if best and best ~= idx then
-          -- deferred: applied after the row pass in frame() — mutating the
-          -- list mid-iteration rendered the same layer twice (duplicate
-          -- name, imgui id conflict) and confused the drag math.
-          panel._pending_move = { id = l.id, to = best }
-        end
-      end
-    else
-      doc._drag = nil
-    end
+  if doc._drag and doc._drag.id == l.id and not ig.is_mouse_down(0) then
+    doc._drag = nil
   end
 
   end)
@@ -253,8 +243,44 @@ function panel.frame()
   for _, l in ipairs(top_down) do
     row(l, 0, in_flight)
   end
-  -- deferred drag move (see row()): apply AFTER the pass so the list is
-  -- stable while rows render.
+
+  -- live reorder decision, AFTER the pass: every row's _row_y0s is now
+  -- fresh for this frame, so the nearest-midpoint target is consistent
+  -- with what was drawn. (Computing it inside the dragged row's render
+  -- read y0s from the previous frame's layout for rows below it, which
+  -- made the reorder ping-pong between two slots.)
+  if doc._drag then
+    if ig.is_mouse_down(0) then
+      local d = doc._drag
+      local l = doc.get_layer(d.id)
+      if l then
+        doc._coalescing = true -- one undo entry for the whole drag
+        local parent = doc.find_parent(l.id)
+        local list = parent and parent.children or doc.layers
+        local idx = nil
+        for i, x in ipairs(list) do if x.id == d.id then idx = i break end end
+        if idx then
+          local _, my = ig.get_mouse_pos()
+          -- target = the same-list row whose midpoint the cursor is nearest
+          local best, bestd = nil, 1e9
+          for i, x in ipairs(list) do
+            local yy = panels._row_y0s[x.id]
+            if yy then
+              local dd = math.abs(yy + ROW_H / 2 - my)
+              if dd < bestd then best, bestd = i, dd end
+            end
+          end
+          if best and best ~= idx then
+            panel._pending_move = { id = d.id, to = best }
+          end
+        end
+      end
+    else
+      doc._drag = nil
+    end
+  end
+  -- apply the deferred move AFTER rows rendered, so the list stays stable
+  -- while the UI draws.
   if panel._pending_move then
     local pm = panel._pending_move
     panel._pending_move = nil

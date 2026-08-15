@@ -158,6 +158,73 @@ function M.test_loaded_ids_dont_collide_with_new()
   t.eq(doc.get_layer(l.id).name, "Fill", "new layer reachable by its id")
 end
 
+-- regression: auto-named layers ("Group", "Export") were created with the
+-- same display name every time; several groups/exports were
+-- indistinguishable in the layer list.
+function M.test_auto_names_are_unique()
+  fresh_doc()
+  local names = {}
+  for i = 1, 3 do
+    local g = doc.new_layer("group")
+    doc.add_layer(g)
+    names[#names + 1] = g.name
+  end
+  local e = doc.new_layer("export")
+  doc.add_layer(e)
+  names[#names + 1] = e.name
+  t.eq(names[1], "Group", "first group")
+  t.eq(names[2], "Group 2", "second group")
+  t.eq(names[3], "Group 3", "third group")
+  t.eq(names[4], "Export", "export does not collide with groups")
+  -- explicit names are kept as given (imports/duplicates)
+  local d = doc.new_layer("paint", "Details")
+  t.eq(d.name, "Details", "explicit name untouched")
+  -- serialization round-trip keeps the names
+  local dec = json.decode(json.encode(doc.serialize()))
+  t.eq(dec.layers[1].name, "Group", "names survive round-trip")
+end
+
+-- drag-reorder must not ping-pong: the target decision reads every row's
+-- screen y for the CURRENT layout. The old code decided inside the dragged
+-- row's render, when rows below it still held y0s from the PREVIOUS
+-- layout — the dragged row and its neighbour shared one slot, so the
+-- decision flipped back and forth every frame. Simulate two frames of the
+-- decision with fresh y0s and assert frame 2 is stable.
+function M.test_drag_reorder_is_stable()
+  local ROW_H = 34
+  local list = { "A", "B", "C" } -- bottom..top (doc.layers order)
+  local y0s = {}
+  local function render_rows()
+    local y = 0
+    for i = #list, 1, -1 do y0s[list[i]] = y; y = y + ROW_H end
+  end
+  local function decide(drag_id, my)
+    local idx
+    for i, x in ipairs(list) do if x == drag_id then idx = i break end end
+    local best, bestd = nil, 1e9
+    for i, x in ipairs(list) do
+      local yy = y0s[x]
+      if yy then
+        local d = math.abs(yy + ROW_H / 2 - my)
+        if d < bestd then best, bestd = i, d end
+      end
+    end
+    return best, idx
+  end
+  -- frame 1: cursor at the top row's midpoint, dragging B up
+  render_rows()
+  local best, idx = decide("B", 17)
+  t.eq(best, 3, "frame1 targets the top slot")
+  t.eq(idx, 2, "B is the middle layer")
+  table.remove(list, 2)
+  table.insert(list, 3, "B") -- apply the move (B now on top)
+  -- frame 2: fresh y0s for the new layout; cursor has not moved
+  render_rows()
+  local best2, idx2 = decide("B", 17)
+  t.eq(idx2, 3, "B now on top")
+  t.eq(best2, idx2, "frame2 stable — no move-back (no ping-pong)")
+end
+
 function M.test_asset_add()
   fresh_doc()
   -- write a tiny png via the save path, load it back

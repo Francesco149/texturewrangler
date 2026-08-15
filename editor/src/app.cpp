@@ -215,7 +215,7 @@ static int l_app_open_file_dialog(lua_State* L) {
   // ("png;jpg"), NOT comma-separated — commas fail SDL's pattern
   // validation and the dialog errors out before opening.
   static const SDL_DialogFileFilter filters[] = {
-      {"Images", "png;jpg;jpeg;bmp;tga;gif;webp"},
+      {"Images", "png;jpg;jpeg;bmp;tga;gif"},
       {"All files", "*"}};
   DlgCtx* ctx = (DlgCtx*)SDL_malloc(sizeof(DlgCtx));
   ctx->path[0] = 0;

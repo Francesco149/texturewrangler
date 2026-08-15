@@ -8,11 +8,6 @@ local ig = tw.ig
 panels.layout = { left_w = 300, right_w = 350, bottom_h = 210 }
 
 panels.state = { sel = nil } -- selected layer id
--- project menu: hover-opened, closes when the mouse leaves it. armed goes
--- false while the menu is open and re-arms when the button is unhovered,
--- so clicking an item (cursor still on the button) doesn't re-open it.
-panels.state.project_armed = true
-panels.state.project_btn_hover = false
 
 function panels.set_selected(id)
   panels.state.sel = id
@@ -191,17 +186,7 @@ function panels.toolbar(rect)
     ig.same_line()
     if ig.button("Export (Ctrl+E)") then export.all() end
     ig.same_line()
-    if ig.button("Project") then
-      panels.state.project_popup = true
-      panels.state.project_armed = false
-    end
-    local btn_hover = ig.is_item_hovered()
-    panels.state.project_btn_hover = btn_hover
-    if not panels.state.project_popup and btn_hover and panels.state.project_armed then
-      panels.state.project_popup = true
-      panels.state.project_armed = false
-    end
-    if not btn_hover then panels.state.project_armed = true end
+    if ig.button("Project") then panels.state.project_popup = true end
     -- right side: status info (aligned with the button text baseline)
     local io = ig.get_io()
     local fps = io.delta_time > 0 and math.floor(1 / io.delta_time) or 0

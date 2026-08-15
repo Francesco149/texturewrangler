@@ -80,10 +80,23 @@ local function deepcopy(t)
   return r
 end
 
+-- unique display name for auto-named layers: "Group", "Group 2", ...
+-- (explicit names — imports, duplicates — are kept as given)
+function doc.unique_name(base)
+  local taken = {}
+  for _, l in ipairs(doc.all_layers()) do taken[l.name] = true end
+  if not taken[base] then return base end
+  local i = 2
+  while taken[base .. " " .. i] do i = i + 1 end
+  return base .. " " .. i
+end
+
 function doc.new_layer(type, name)
   local d = deepcopy(defaults[type] or {})
+  local n = name or (doc.type_names[type] or type)
+  if not name then n = doc.unique_name(n) end
   return { id = new_id(), type = type,
-           name = name or (doc.type_names[type] or type),
+           name = n,
            visible = true, opacity = 1, blend = "normal", params = d,
            children = type == "group" and {} or nil }
 end

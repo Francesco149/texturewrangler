@@ -10,7 +10,10 @@ end
 
 function M.panel(l, ui)
   local p = l.params
-  ui.input("Name", p.export_name or l.name, function(v) p.export_name = v end)
+  -- "File name" (NOT "Name"): panel_props already draws a "Name" input for
+  -- the layer name in the same window — two identical labels = duplicate
+  -- imgui ids (state corruption + "conflicting ids" error).
+  ui.input("File name", p.export_name or l.name, function(v) p.export_name = v end)
   ui.check("Fixed size", p.size ~= nil, function(v)
     if v then
       p.size = { doc.canvas[1], doc.canvas[2] }

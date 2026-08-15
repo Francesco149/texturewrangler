@@ -757,6 +757,8 @@ static int l_get_io(lua_State* L) {
   lua_setfield(L, -2, "want_capture_mouse");
   lua_pushboolean(L, io.WantCaptureKeyboard);
   lua_setfield(L, -2, "want_capture_keyboard");
+  lua_pushboolean(L, io.WantTextInput);
+  lua_setfield(L, -2, "want_text_input");
   lua_pushboolean(L, io.KeyCtrl);
   lua_setfield(L, -2, "key_ctrl");
   lua_pushboolean(L, io.KeyShift);
