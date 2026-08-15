@@ -1,4 +1,4 @@
-# nightly.yml — daily build + release. Each run:
+# nightly.yml - daily build + release. Each run:
 #   1. builds the windows (mingw cross) package and runs the headless test
 #      suite (which builds the linux binary as its test target) inside
 #      `nix develop`
