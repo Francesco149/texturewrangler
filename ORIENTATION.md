@@ -121,6 +121,33 @@ tools/embed.py     fonts → C array header
   recoloring an entry updates every pixel of that index. "Regenerate"
   clears it. Dither: none/bayer4/fs/sierra/atkinson.
 
+## Debugging playbook (hard crashes on Windows)
+
+1. The app already logs everything to `<exe dir>/texturewrangler-debug.log`
+   and crash handlers append the exception + module-relative stack. Start
+   there.
+2. Heap corruption (0xC0000374) is detected at the NEXT alloc/free after
+   the damage — the reported stack is the detector, not the bug. Enable
+   the full page heap to catch the actual write/free:
+   `reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File
+   Execution Options\texturewrangler.exe" /v GlobalFlag /d 0x02000000 /f`
+   (admin; delete the value afterwards). The crash becomes an AV at the
+   faulting instruction.
+3. For a full stack with the exception context, enable WER local dumps:
+   `reg add "HKLM\SOFTWARE\Microsoft\Windows\Windows Error Reporting\
+   LocalDumps\texturewrangler.exe" /v DumpFolder /d C:\...\dumps /f`,
+   `/v DumpType /d 2`, `/v DumpCount /d 10`. Parse the minidump with
+   `python3 tools/minidump_parse.py dump.dmp` (exception, modules, the
+   crashing thread's stack scan).
+4. `make -C editor asan-win` builds a Windows AddressSanitizer exe (mingw
+   `-fsanitize=address`; requires `-lasan -lubsan`, see the Makefile
+   target) for on-host detection.
+5. When hunting an allocator bug, bisect by eliminating suspects: the Lua
+   allocator, image pixel buffers, and the app's own frees can all be
+   instrumented independently (guard pages, free registries) — see git
+   history of app.cpp/lua.cpp/tex.cpp for the pattern used on the drop
+   crash.
+
 ## Verification workflow (autonomous, no screen stealing)
 
 1. `make -C editor test` — kernels are pixel-exact deterministic; composite
@@ -148,6 +175,17 @@ tools/embed.py     fonts → C array header
 - `path_join`/`path_dirname` use a rotating static buffer ring — nested
   calls alias; the overlap guard + candidate snapshot in find_lua_dir are
   load-bearing. Don't "simplify" them.
+- SDL3 drop events: `SDL_DropEvent.data` is an SDL_CreateTemporaryString —
+  SDL OWNS it and frees it automatically. NEVER `SDL_free` it. The app
+  freeing it was a double-free → heap corruption (0xC0000374) crashing
+  0.5–1 s later — and because the ~100-byte string sat next to Lua GC
+  blocks, the corruption first surfaced in the Lua allocator, pointing
+  every detector at the wrong suspect. Same class: `SDL_GetClipboardData`
+  buffers ARE app-owned and must be `SDL_free`d (never `free()`).
+- Debugging infra is built in: every log line is ALSO appended to
+  `<exe dir>/texturewrangler-debug.log`, and crash handlers (Windows VEH +
+  SEH, linux signals) append the exception code + a stack. On Windows the
+  exception is CONTINUED so WER can write a minidump. Full playbook below.
 - `ig.end` is a Lua reserved word — the binding is `ig.end_`.
 - imgui style vars are typed: PushStyleVar float vs ImVec2 asserts if
   mismatched (ig.cpp has the explicit v2 list).

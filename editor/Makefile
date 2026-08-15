@@ -103,6 +103,31 @@ $(BUILD)/asan-obj/%.o: $(IMGUI)/misc/cpp/%.cpp | $(BUILD)/asan-obj
 $(BUILD)/asan-obj/lua/%.o: $(LUA)/src/%.c | $(BUILD)/asan-obj/lua
 	$(CC) -O1 -g -fsanitize=address,undefined -std=c11 -I $(LUA)/src -c $< -o $@
 
+# ══ asan-win (mingw + AddressSanitizer; for on-host crash diagnosis) ════════
+ASANWIN_OUT := $(BUILD)/texturewrangler-asan.exe
+ASANWIN_CXXFLAGS := $(CXXFLAGS_COMMON) -DUNICODE -D_UNICODE -D_WIN32_WINNT=0x0A00 \
+  -I $(SDL3_CROSS_INC) -O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined
+ASANWIN_LDFLAGS := -static-libgcc -static-libstdc++ -mconsole -lasan -lubsan
+ASANWIN_OBJ := $(addprefix $(BUILD)/asanwin-obj/,$(notdir $(SRC:.cpp=.o)) \
+              $(IMGUI_CORE:.cpp=.o) $(IMGUI_BACKEND:.cpp=.o) \
+              $(addprefix lua/,$(notdir $(LUA_C:.c=.o))))
+
+asan-win: $(ASANWIN_OUT)
+$(ASANWIN_OUT): $(ASANWIN_OBJ) | $(BUILD)
+	$(WIN_CXX) $(ASANWIN_OBJ) -o $(ASANWIN_OUT) $(ASANWIN_LDFLAGS) $(WIN_LIBS)
+	@echo "built $(ASANWIN_OUT)"
+
+$(BUILD)/asanwin-obj/%.o: src/%.cpp src/editor.h | $(BUILD)/asanwin-obj
+	$(WIN_CXX) $(ASANWIN_CXXFLAGS) -c $< -o $@
+$(BUILD)/asanwin-obj/%.o: $(IMGUI)/%.cpp | $(BUILD)/asanwin-obj
+	$(WIN_CXX) $(ASANWIN_CXXFLAGS) -c $< -o $@
+$(BUILD)/asanwin-obj/%.o: $(IMGUI)/backends/%.cpp | $(BUILD)/asanwin-obj
+	$(WIN_CXX) $(ASANWIN_CXXFLAGS) -c $< -o $@
+$(BUILD)/asanwin-obj/%.o: $(IMGUI)/misc/cpp/%.cpp | $(BUILD)/asanwin-obj
+	$(WIN_CXX) $(ASANWIN_CXXFLAGS) -c $< -o $@
+$(BUILD)/asanwin-obj/lua/%.o: $(LUA)/src/%.c | $(BUILD)/asanwin-obj/lua
+	$(WIN_CC) -O1 -g -fsanitize=address,undefined -std=c11 -I $(LUA)/src -c $< -o $@
+
 # ══ generic object rules ════════════════════════════════════════════════════
 $(OBJ)/%.o: src/%.cpp src/editor.h | $(OBJ)
 	$(WIN_CXX) $(WIN_CXXFLAGS) -c $< -o $@
@@ -165,6 +190,12 @@ $(BUILD)/asan-obj:
 	mkdir -p $(BUILD)/asan-obj
 $(BUILD)/asan-obj/lua:
 	mkdir -p $(BUILD)/asan-obj/lua
+$(BUILD)/asanwin-obj:
+	mkdir -p $(BUILD)/asanwin-obj
+$(BUILD)/asanwin-obj/lua:
+	mkdir -p $(BUILD)/asanwin-obj/lua
+$(BUILD)/asanwin-obj/app.o: src/app.cpp src/editor.h $(FONTS_H) | $(BUILD)/asanwin-obj
+	$(WIN_CXX) $(ASANWIN_CXXFLAGS) -c src/app.cpp -o $@
 
 # headless screenshot of the editor UI (linux build, offscreen driver)
 shot: linux-build
@@ -206,4 +237,4 @@ clean:
 	rm -rf $(OBJ) $(OBJL) $(BUILD)/asan-obj $(OUT) $(LINUX_OUT) $(ASAN_OUT) \
 	       $(BUILD)/texturewrangler-win64
 
-.PHONY: win linux linux-build asan shot test test-asan test-golden test-bless run package clean
+.PHONY: win linux linux-build asan shot test test-asan asan-win test-golden test-bless run package clean
