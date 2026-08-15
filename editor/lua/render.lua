@@ -67,6 +67,14 @@ local function composite_list(layers, limit_idx, size0, cache, force_from)
       if not forced and c and c.token == token and c.size[1] == size[1] and
          c.size[2] == size[2] then
         img = c.img
+        -- a size-changing layer (downscale/crop) also advances the working
+        -- size on a cache hit — otherwise the layers above it re-render at
+        -- the wrong size against a mismatched below-composite (blend modes
+        -- degraded to plain "no blend").
+        if c.out_size then
+          size[1] = c.out_size[1]
+          size[2] = c.out_size[2]
+        end
       else
         if c and c.texid then pcall(tw.gfx.release, c.texid) end
         local out, newsize = render.layer(l, size, img, cache)
@@ -97,7 +105,7 @@ local function composite_list(layers, limit_idx, size0, cache, force_from)
         if newsize then size = newsize end
         if cache then
           cache[l.id] = { token = token, img = img, size = entry_size,
-                          out = out }
+                          out_size = { size[1], size[2] }, out = out }
         end
       end
     end

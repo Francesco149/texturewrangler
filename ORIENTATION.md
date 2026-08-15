@@ -126,12 +126,20 @@ tools/embed.py     fonts → C array header
 1. `make -C editor test` — kernels are pixel-exact deterministic; composite
    tests cover groups, masks, downscale flow, paint, palette recolor.
 2. `make -C editor test-asan` — same under ASan+UBSan.
-3. `build/texturewrangler --demo build/demo --shot build/shot.png --frames 30`
+3. Golden composite gate: `make -C editor test` compares the final
+   composite of `editor/tests/golden` against the committed
+   `composite.png` pixel-exactly — ANY change to the compositing pipeline
+   (blends, cache behavior, resize, palette, groups) fails the build.
+   Re-bless ONLY for an intentional visual change:
+   `make -C editor test-bless`, review the diff, then commit
+   `editor/tests/golden/`. `make -C editor test-golden` runs the check
+   standalone.
+4. `build/texturewrangler --demo build/demo --shot build/shot.png --frames 30`
    then `~/.local/bin/vision build/shot.png "…"` — verify layout, panels,
    texture quality, seams.
-4. `build/texturewrangler --project build/demo --export` — verify exports;
+5. `build/texturewrangler --project build/demo --export` — verify exports;
    `--lua` for pixel-level assertions (see the alpha check pattern).
-5. Windows: `make -C editor package`, copy to a C:\ path, run via a .bat
+6. Windows: `make -C editor package`, copy to a C:\ path, run via a .bat
    (cmd.exe can't cd into UNC paths). Exports are md5-identical to linux —
    determinism is a feature, use it.
 

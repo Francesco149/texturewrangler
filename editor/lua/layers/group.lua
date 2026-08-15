@@ -30,6 +30,10 @@ function M.render(l, size, below, cache)
       elseif c and c.token == token and c.size[1] == csize[1] and
              c.size[2] == csize[2] then
         img = c.img
+        if c.out_size then
+          csize[1] = c.out_size[1]
+          csize[2] = c.out_size[2]
+        end
       else
         if c and c.texid then pcall(tw.gfx.release, c.texid) end
         local co, newsize = render.layer(cl, csize, img, cache)
@@ -56,7 +60,7 @@ function M.render(l, size, below, cache)
         if newsize then csize = newsize end
         if cache then
           cache[cl.id] = { token = token, img = img, size = entry_size,
-                           out = co }
+                           out_size = { csize[1], csize[2] }, out = co }
         end
       end
     end

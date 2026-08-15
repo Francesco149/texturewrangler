@@ -107,6 +107,30 @@ function M.test_downscale_cache_hits()
   t.true_(img4 ~= img3, "bump invalidates the cache")
 end
 
+-- regression: the downscale cache hit must ADVANCE the working size, or
+-- layers above it re-render at the wrong size against a mismatched
+-- below-composite and their blend modes degrade to plain "no blend".
+function M.test_downscale_cache_preserves_blend()
+  fresh()
+  add_fill({ r = 255, g = 0, b = 0, a = 255 })
+  local d = doc.new_layer("downscale")
+  d.params.size = { 8, 8 }
+  doc.add_layer(d)
+  local g = doc.new_layer("fill")
+  g.params.type = "solid"
+  g.params.c0 = { r = 0, g = 255, b = 0, a = 255 }
+  g.blend = "multiply"
+  g.opacity = 0.5
+  doc.add_layer(g)
+  local b1 = render.composite(nil, { 16, 16 }, doc._cache)
+  local b2 = render.composite(nil, { 16, 16 }, doc._cache) -- cache hit
+  t.true_(b1 == b2, "cached composite identical to fresh")
+  local r1 = select(1, tex.get(b2, 0, 0))
+  local g1 = select(2, tex.get(b2, 0, 0))
+  t.eq(r1, 128, "multiply blend preserved on cache hit, r=" .. r1)
+  t.eq(g1, 0, "multiply blend preserved on cache hit, g=" .. g1)
+end
+
 function M.test_palette_layer_flow()
   fresh()
   add_fill({ r = 200, g = 30, b = 30, a = 255 })

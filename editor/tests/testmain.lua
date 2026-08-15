@@ -18,7 +18,8 @@ for _, t in ipairs({ "image", "paint", "noise", "grade", "palette",
 end
 
 local ok, err = pcall(function()
-  local suites = { "test_json", "test_kernels", "test_doc", "test_composite" }
+  local suites = { "test_json", "test_kernels", "test_doc", "test_composite",
+                   "test_golden" }
   for _, s in ipairs(suites) do
     local m = require(s)
     local t = require("testlib")

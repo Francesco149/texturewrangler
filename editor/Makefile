@@ -177,6 +177,17 @@ test: linux-build
 test-asan: asan
 	cd .. && ASAN_OPTIONS=detect_leaks=0 ./build/texturewrangler-asan --test
 
+# golden composite regression: `test` (above) compares the final composite
+# of tests/golden against the committed composite.png pixel-exactly and
+# FAILS the build on any difference. Re-bless ONLY for an intentional
+# visual change: `make test-bless` regenerates project + golden, then
+# commit everything under tests/golden after reviewing the diff.
+test-golden: linux-build
+	cd .. && ./build/texturewrangler --lua editor/tests/make_golden.lua check
+
+test-bless: linux-build
+	cd .. && ./build/texturewrangler --lua editor/tests/make_golden.lua bless
+
 run: linux-build
 	cd .. && ./build/texturewrangler
 
@@ -195,4 +206,4 @@ clean:
 	rm -rf $(OBJ) $(OBJL) $(BUILD)/asan-obj $(OUT) $(LINUX_OUT) $(ASAN_OUT) \
 	       $(BUILD)/texturewrangler-win64
 
-.PHONY: win linux linux-build asan shot test test-asan run package clean
+.PHONY: win linux linux-build asan shot test test-asan test-golden test-bless run package clean
