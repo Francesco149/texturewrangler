@@ -1,0 +1,81 @@
+# nightly.yml — daily build + release. Each run:
+#   1. builds the windows (mingw cross) package and runs the headless test
+#      suite (which builds the linux binary as its test target) inside
+#      `nix develop`
+#   2. stages dist/texturewrangler-win64.zip + checksums
+#   3. force-moves the `nightly` tag to the run's commit (delete + recreate
+#      the release), so the tag/release always points at the newest build
+#
+# No linux artifact: the linux build is documented in the README (build from
+# the nix flake, or package for your distro). Trigger: cron (daily 03:15 UTC)
+# or manual via workflow_dispatch.
+
+name: nightly
+
+on:
+  schedule:
+    - cron: "15 3 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nightly-build
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v22
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Nix binary cache
+        uses: DeterminateSystems/magic-nix-cache-action@v14
+
+      - name: Build windows package + run the test suite
+        run: |
+          nix develop --command bash -c '
+            set -euo pipefail
+            make -C editor package
+            make -C editor test
+          '
+
+      - name: Stage release assets
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          (cd build && zip -q -r ../dist/texturewrangler-win64.zip texturewrangler-win64)
+          (cd dist && sha256sum * > SHA256SUMS)
+
+      - name: Publish nightly release (bump tag + assets)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          DATE=$(date -u +%Y-%m-%d)
+          {
+            echo "Nightly build of $(git log -1 --format='%h %s' HEAD) ($DATE)."
+            echo
+            echo "Proof-of-concept prototype — not production software. See the README."
+            echo
+            echo "**Assets**"
+            echo "- \`texturewrangler-win64.zip\` — self-contained Windows x64 build (exe + SDL3.dll + libmcfgthread-2.dll + embedded Lua runtime)."
+            echo "- \`SHA256SUMS\` — checksums."
+            echo
+            echo "Linux: no prebuilt artifact — build from the nix flake (\`nix develop\` + \`make -C editor linux\`) or package it for your distro; see the README."
+          } > dist/NOTES.md
+          # rolling tag: delete the previous release + tag, recreate at HEAD
+          gh release delete nightly --yes --cleanup-tag >/dev/null 2>&1 || true
+          gh release create nightly \
+            --target "$GITHUB_SHA" \
+            --title "Nightly build ($DATE)" \
+            --notes-file dist/NOTES.md \
+            dist/texturewrangler-win64.zip \
+            dist/SHA256SUMS
+          gh release view nightly --json tagName,url -q '"nightly tag: " + .tagName + " → " + .url'

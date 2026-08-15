@@ -2,3 +2,4 @@ build/
 result
 .direnv/
 *.o
+__pycache__/
